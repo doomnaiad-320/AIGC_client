@@ -2,13 +2,13 @@ import type { BackgroundJobType } from "@loomic/shared";
 
 import type { JobService } from "./job-service.js";
 import type { PgmqClient } from "../../queue/pgmq-client.js";
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+import type { AdminDbClient } from "../../db/client.js";
 import type { ServerEnv } from "../../config/env.js";
 
 export type ExecutorContext = {
   jobService: JobService;
   pgmq: PgmqClient;
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
   env: ServerEnv;
   /** PGMQ queue name for the current job (set per-message by the worker). */
   queue: string;

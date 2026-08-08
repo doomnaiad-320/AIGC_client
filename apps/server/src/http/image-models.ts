@@ -10,7 +10,7 @@ import {
 
 import type { CreditService } from "../features/credits/credit-service.js";
 import { getAvailableImageModels } from "../generation/providers/registry.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 
 export async function registerImageModelRoutes(

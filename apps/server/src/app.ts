@@ -48,6 +48,7 @@ import {
 } from "./features/uploads/upload-service.js";
 import { type ServerEnv, loadServerEnv, resolveDefaultAgentModel } from "./config/env.js";
 import { createPgmqClient } from "./queue/pgmq-client.js";
+import { getDatabaseUrl } from "./db/postgres.js";
 import {
   createCreditService,
   type CreditService,
@@ -76,6 +77,7 @@ import { registerCanvasRoutes } from "./http/canvases.js";
 import { registerChatRoutes } from "./http/chat.js";
 import { registerGenerateRoutes } from "./http/generate.js";
 import { registerHealthRoutes } from "./http/health.js";
+import { registerAuthRoutes } from "./http/auth.js";
 import { registerImageProxyRoute } from "./http/image-proxy.js";
 import { registerModelRoutes } from "./http/models.js";
 import { registerImageModelRoutes } from "./http/image-models.js";
@@ -90,12 +92,13 @@ import { registerViewerRoutes } from "./http/viewer.js";
 import { CanvasEventBuffer } from "./ws/event-buffer.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { registerWsRoute } from "./ws/handler.js";
-import { createAdminSupabaseClient } from "./supabase/admin.js";
+import { createAdminDbClient } from "./db/client.js";
+import { registerLocalStorageRoutes } from "./db/storage.js";
 import {
-  createSupabaseRequestAuthenticator,
-  createUserSupabaseClientFactory,
+  createRequestAuthenticator,
+  createUserDbClientFactory,
   type RequestAuthenticator,
-} from "./supabase/user.js";
+} from "./auth/user.js";
 
 export type BuildAppOptions = {
   agentFactory?: LoomicAgentFactory;
@@ -146,13 +149,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       viewerService,
     });
   });
-  const auth = options.auth ?? createSupabaseRequestAuthenticator(env);
-  const createUserClient = createUserSupabaseClientFactory(env);
+  const auth = options.auth ?? createRequestAuthenticator(env);
+  const createUserClient = createUserDbClientFactory(env);
   let adminClient:
-    | ReturnType<typeof createAdminSupabaseClient>
+    | ReturnType<typeof createAdminDbClient>
     | undefined;
   const getAdminClient = () => {
-    adminClient ??= createAdminSupabaseClient(env);
+    adminClient ??= createAdminDbClient(env);
     return adminClient;
   };
   const viewerService =
@@ -181,8 +184,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       });
   const uploadService =
     options.uploadService ?? createUploadService({ createUserClient });
-  const pgmq = env.supabaseDbUrl
-    ? createPgmqClient(env.supabaseDbUrl)
+  const databaseUrl = getDatabaseUrl(env);
+  const pgmq = databaseUrl
+    ? createPgmqClient(databaseUrl)
     : undefined;
   const jobService =
     options.jobService ??
@@ -259,6 +263,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   void registerHealthRoutes(app, env);
+  void registerAuthRoutes(app, { env, getAdminClient });
+  registerLocalStorageRoutes(app, env);
   void registerFontsRoutes(app, { env });
   void registerImageProxyRoute(app);
   void registerRunRoutes(app, agentRuns, {

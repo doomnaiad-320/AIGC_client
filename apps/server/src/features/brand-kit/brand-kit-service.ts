@@ -10,8 +10,8 @@ import type {
 
 import type {
   AuthenticatedUser,
-  UserSupabaseClient,
-} from "../../supabase/user.js";
+  UserDbClient,
+} from "../../auth/user.js";
 
 const BRAND_KIT_BUCKET = "brand-kit-assets";
 const SIGNED_URL_EXPIRY_SECONDS = 3600;
@@ -92,10 +92,10 @@ export type BrandKitService = {
 };
 
 export function createBrandKitService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
 }): BrandKitService {
   async function fetchKitDetail(
-    client: UserSupabaseClient,
+    client: UserDbClient,
     kitId: string,
   ): Promise<BrandKitDetail> {
     const { data: kit, error: kitError } = await client

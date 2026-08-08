@@ -6,7 +6,7 @@ import type {
   Json,
 } from "@loomic/shared";
 
-import type { AuthenticatedUser, UserSupabaseClient } from "../../supabase/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 import type { ThreadService } from "./thread-service.js";
 
 export class ChatServiceError extends Error {
@@ -75,7 +75,7 @@ function synthesizeLegacyBlocks(
 }
 
 export function createChatService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
   threadService: Pick<ThreadService, "createThreadId">;
 }): ChatService {
   return {

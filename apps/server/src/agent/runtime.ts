@@ -21,7 +21,7 @@ import { createPipelineLogger } from "../ws/logger.js";
 import type { AgentRunMetadataService } from "../features/agent-runs/agent-run-service.js";
 import type { JobService } from "../features/jobs/job-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
-import type { AuthenticatedUser, UserSupabaseClient } from "../supabase/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../auth/user.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 // execute 工具由 deepagents 内置提供（LocalShellBackend 作为 sandbox backend）
 // 不需要自定义代码执行工具
@@ -417,14 +417,14 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
         const failedEvent = toFailedEvent(
           runId,
           now,
-          new Error("SUPABASE_DB_URL is required for persisted agent threads."),
+          new Error("DATABASE_URL is required for persisted agent threads."),
         );
         run.status = "failed";
         await updatePersistedRunFailure(
           options.agentRunMetadataService,
           run,
           now,
-          new Error("SUPABASE_DB_URL is required for persisted agent threads."),
+          new Error("DATABASE_URL is required for persisted agent threads."),
         );
         yield failedEvent;
         return;
@@ -451,7 +451,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           // Look up personal workspace directly — the viewer is already
           // bootstrapped from the normal auth flow, so we skip ensureViewer
           // to avoid its strict email validation on the profile schema.
-          const client = createClient(accessToken) as UserSupabaseClient;
+          const client = createClient(accessToken) as UserDbClient;
           const { data: ws } = await client
             .from("workspaces")
             .select("id")
@@ -561,7 +561,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               let elementId: string | undefined;
               if (canvasId && result.object_path) {
                 try {
-                  const writerClient = createClient(accessToken) as UserSupabaseClient;
+                  const writerClient = createClient(accessToken) as UserDbClient;
                   const explicitPlacement = (input as any).placementX != null && (input as any).placementY != null
                     ? {
                         x: (input as any).placementX,
@@ -642,7 +642,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             console.log(`[submitVideoJob] ${label} +${Date.now() - jobT0}ms`, extra ? JSON.stringify(extra) : "");
           };
 
-          const client = createClient(accessToken) as UserSupabaseClient;
+          const client = createClient(accessToken) as UserDbClient;
           const { data: ws } = await client
             .from("workspaces")
             .select("id")
@@ -763,7 +763,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               let elementId: string | undefined;
               if (canvasId && result.signed_url) {
                 try {
-                  const writerClient = createClient(accessToken) as UserSupabaseClient;
+                  const writerClient = createClient(accessToken) as UserDbClient;
                   const explicitPlacement = (input as any).placementX != null && (input as any).placementY != null
                     ? {
                         x: (input as any).placementX,
@@ -848,7 +848,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
       let workspaceSkills: WorkspaceSkillEntry[] = [];
       if (run.canvasId && run.accessToken && options.createUserClient) {
         try {
-          const wsClient = options.createUserClient(run.accessToken) as UserSupabaseClient;
+          const wsClient = options.createUserClient(run.accessToken) as UserDbClient;
           workspaceSkills = await loadWorkspaceSkills(wsClient, run.canvasId);
           rlog.lap("workspace_skills_loaded", { count: workspaceSkills.length });
         } catch (err) {
@@ -882,7 +882,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           const createClient = options.createUserClient;
           const accessToken = run.accessToken;
           persistImage = async (sourceUrl, mimeType, prompt) => {
-            const client = createClient(accessToken) as UserSupabaseClient;
+            const client = createClient(accessToken) as UserDbClient;
             const response = await fetch(sourceUrl);
             if (!response.ok) throw new Error(`Download failed: ${response.status}`);
             const buffer = Buffer.from(await response.arrayBuffer());

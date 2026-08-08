@@ -1,6 +1,6 @@
 import type { CanvasContent, CanvasDetail, Json } from "@loomic/shared";
 
-import type { AuthenticatedUser, UserSupabaseClient } from "../../supabase/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 
 export class CanvasServiceError extends Error {
   readonly statusCode: number;
@@ -34,7 +34,7 @@ const OSS_MARKER_PREFIX = "oss://";
 const CANVAS_FILES_BUCKET = "project-assets";
 
 export function createCanvasService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
 }): CanvasService {
   return {
     async getCanvas(user, canvasId) {
@@ -87,7 +87,7 @@ export function createCanvasService(options: {
 type CanvasFileRecord = Record<string, Record<string, unknown>>;
 
 async function extractFilesToStorage(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   canvasId: string,
   content: CanvasContent,
 ): Promise<CanvasContent> {
@@ -152,7 +152,7 @@ async function extractFilesToStorage(
 // ---------------------------------------------------------------------------
 
 async function resolveFilesFromStorage(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   content: CanvasContent,
 ): Promise<CanvasContent> {
   const files = (content as { files?: CanvasFileRecord }).files;

@@ -16,7 +16,7 @@ import {
   type CreditService,
 } from "../features/credits/credit-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerCreditRoutes(
   app: FastifyInstance,

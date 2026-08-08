@@ -18,14 +18,14 @@ import {
 import type { CreditService } from "../features/credits/credit-service.js";
 import type {
   RequestAuthenticator,
-  UserSupabaseClient,
-} from "../supabase/user.js";
+  UserDbClient,
+} from "../auth/user.js";
 
 export async function registerViewerRoutes(
   app: FastifyInstance,
   options: {
     auth: RequestAuthenticator;
-    createUserClient: (accessToken: string) => UserSupabaseClient;
+    createUserClient: (accessToken: string) => UserDbClient;
     creditService?: CreditService;
     viewerService: ViewerService;
   },

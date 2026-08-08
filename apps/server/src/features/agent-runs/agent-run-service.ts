@@ -1,4 +1,4 @@
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+import type { AdminDbClient } from "../../db/client.js";
 import type {
   CreateAcceptedAgentRunInput,
   UpdateAgentRunInput,
@@ -21,7 +21,7 @@ export type AgentRunMetadataService = {
 };
 
 export function createAgentRunMetadataService(options: {
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
 }): AgentRunMetadataService {
   return {
     async createAcceptedRun(input) {

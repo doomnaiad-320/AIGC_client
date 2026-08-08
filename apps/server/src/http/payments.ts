@@ -13,7 +13,7 @@ import {
   type PaymentService,
 } from "../features/payments/payment-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerPaymentRoutes(
   app: FastifyInstance,

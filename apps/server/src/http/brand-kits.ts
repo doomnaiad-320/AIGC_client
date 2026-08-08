@@ -16,7 +16,7 @@ import {
   BrandKitServiceError,
   type BrandKitService,
 } from "../features/brand-kit/brand-kit-service.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   "image/png",

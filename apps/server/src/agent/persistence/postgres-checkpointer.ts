@@ -5,12 +5,12 @@ export const LANGGRAPH_PERSISTENCE_SCHEMA = "langgraph";
 
 /**
  * Default pool size for the checkpointer connection pool.
- * Kept low to avoid exhausting Supabase Supavisor connection limits
- * when multiple pools (checkpointer + store + pgmq) coexist.
+ * Kept low to avoid exhausting Postgres connection limits
+ * when multiple pools (checkpointer + store) coexist.
  */
 const DEFAULT_POOL_MAX = 3;
 
-export async function createSupabaseCheckpointer(options: {
+export async function createPostgresCheckpointer(options: {
   connectionString: string;
   poolMax?: number;
 }) {

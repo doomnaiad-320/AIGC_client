@@ -1,4 +1,4 @@
-import type { UserSupabaseClient } from "../supabase/user.js";
+import type { UserDbClient } from "../auth/user.js";
 
 /**
  * A file bundled with a skill (scripts/, references/, assets/).
@@ -35,7 +35,7 @@ export interface WorkspaceSkillEntry {
  * non-empty `skill_content` are returned.
  */
 export async function loadWorkspaceSkills(
-  userClient: UserSupabaseClient,
+  userClient: UserDbClient,
   canvasId: string,
 ): Promise<WorkspaceSkillEntry[]> {
   // Step 1: Resolve canvas → project → workspace
@@ -104,7 +104,7 @@ export async function loadWorkspaceSkills(
  * Resolve canvas ID → workspace ID via the canvas → project join.
  */
 async function resolveWorkspaceId(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   canvasId: string,
 ): Promise<string | null> {
   // Try joined query first (single round-trip)

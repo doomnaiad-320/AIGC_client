@@ -15,7 +15,7 @@ import {
   PLAN_CONFIGS,
 } from "@loomic/shared";
 
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+import type { AdminDbClient } from "../../db/client.js";
 
 // ── Error ────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ export type TierGuard = {
 // ── Factory ──────────────────────────────────────────────────
 
 export function createTierGuard(options: {
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
 }): TierGuard {
   return {
     checkModelAccess(plan, modelId) {

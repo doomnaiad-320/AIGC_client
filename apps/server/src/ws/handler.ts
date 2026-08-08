@@ -15,7 +15,7 @@ import type { ViewerService } from "../features/bootstrap/ensure-user-foundation
 import type {
   AuthenticatedUser,
   RequestAuthenticator,
-} from "../supabase/user.js";
+} from "../auth/user.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import type { CanvasEventBuffer } from "./event-buffer.js";
 import type { ChatService } from "../features/chat/chat-service.js";

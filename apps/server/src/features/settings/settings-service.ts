@@ -1,6 +1,6 @@
 import type { WorkspaceSettings } from "@loomic/shared";
 
-import type { AuthenticatedUser, UserSupabaseClient } from "../../supabase/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 
 const FALLBACK_MODEL = "gpt-5.4-mini";
 
@@ -38,7 +38,7 @@ export type SettingsService = {
 };
 
 export function createSettingsService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
   /** Override the fallback model when no workspace setting exists. */
   defaultModel?: string;
 }): SettingsService {

@@ -12,7 +12,7 @@ import {
   type UploadService,
 } from "../features/uploads/upload-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/png",

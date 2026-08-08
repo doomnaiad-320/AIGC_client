@@ -17,11 +17,11 @@ import {
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import type {
   RequestAuthenticator,
-  UserSupabaseClient,
-} from "../supabase/user.js";
+  UserDbClient,
+} from "../auth/user.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const untypedFrom = (client: UserSupabaseClient, table: string) => (client as any).from(table);
+const untypedFrom = (client: UserDbClient, table: string) => (client as any).from(table);
 
 // ---------------------------------------------------------------------------
 // Skill row mappers (duplicated from skills.ts to avoid circular imports)
@@ -115,7 +115,7 @@ export async function registerMarketplaceRoutes(
   app: FastifyInstance,
   options: {
     auth: RequestAuthenticator;
-    createUserClient: (accessToken: string) => UserSupabaseClient;
+    createUserClient: (accessToken: string) => UserDbClient;
     viewerService: ViewerService;
   },
 ) {

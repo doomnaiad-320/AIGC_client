@@ -4,8 +4,8 @@ import {
   viewerResponseSchema,
 } from "@loomic/shared";
 
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
-import type { AuthenticatedUser } from "../../supabase/user.js";
+import type { AdminDbClient } from "../../db/client.js";
+import type { AuthenticatedUser } from "../../auth/user.js";
 
 const BOOTSTRAP_FAILED_MESSAGE = "Unable to prepare viewer workspace.";
 
@@ -23,7 +23,7 @@ export class BootstrapError extends Error {
 }
 
 export function createViewerService(options: {
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
 }): ViewerService {
   return {
     async ensureViewer(user) {
@@ -64,7 +64,7 @@ export function createViewerService(options: {
 }
 
 async function loadPersonalWorkspace(
-  admin: AdminSupabaseClient,
+  admin: AdminDbClient,
   userId: string,
 ) {
   const { data, error } = await admin
@@ -88,7 +88,7 @@ async function loadPersonalWorkspace(
   } as const;
 }
 
-async function loadProfile(admin: AdminSupabaseClient, userId: string) {
+async function loadProfile(admin: AdminDbClient, userId: string) {
   const { data, error } = await admin
     .from("profiles")
     .select("id, email, display_name, avatar_url")
@@ -108,7 +108,7 @@ async function loadProfile(admin: AdminSupabaseClient, userId: string) {
 }
 
 async function loadMembership(
-  admin: AdminSupabaseClient,
+  admin: AdminDbClient,
   workspaceId: string,
   userId: string,
 ) {

@@ -11,7 +11,11 @@ export const DEFAULT_WEB_ORIGIN = "http://localhost:3000";
  * When Google/Vertex is configured but OpenAI is not, defaults to Gemini 2.5 Flash.
  */
 export function resolveDefaultAgentModel(
-  env: Pick<ServerEnv, "googleApiKey" | "googleVertexProject" | "openAIApiKey">,
+  env: {
+    googleApiKey?: string | undefined;
+    googleVertexProject?: string | undefined;
+    openAIApiKey?: string | undefined;
+  },
 ): string {
   const hasOpenAI = !!env.openAIApiKey;
   const hasGoogle = !!(env.googleApiKey || env.googleVertexProject);
@@ -26,6 +30,8 @@ export type ServerEnv = {
   agentBackendMode: AgentBackendMode;
   agentFilesRoot?: string;
   agentModel: string;
+  appJwtSecret?: string;
+  databaseUrl?: string;
   googleApiKey?: string;
   googleApplicationCredentials?: string;
   googleFontsApiKey?: string;
@@ -35,13 +41,10 @@ export type ServerEnv = {
   openAIApiBase?: string;
   openAIApiKey?: string;
   port: number;
+  postgresPoolMax?: number;
   replicateApiToken?: string;
-  supabaseAnonKey?: string;
-  supabaseDbUrl?: string;
-  supabaseJwtSecret?: string;
-  supabaseProjectId?: string;
-  supabaseServiceRoleKey?: string;
-  supabaseUrl?: string;
+  serverPublicUrl?: string;
+  storageRoot?: string;
   version: string;
   volcesApiKey?: string;
   volcesBaseUrl?: string;
@@ -77,21 +80,21 @@ export function loadServerEnv(
     overrides.openAIApiBase ?? normalizeOptionalString(source.OPENAI_API_BASE);
   const openAIApiKey =
     overrides.openAIApiKey ?? normalizeOptionalString(source.OPENAI_API_KEY);
-  const supabaseUrl =
-    overrides.supabaseUrl ?? normalizeOptionalString(source.SUPABASE_URL);
-  const supabaseAnonKey =
-    overrides.supabaseAnonKey ??
-    normalizeOptionalString(source.SUPABASE_ANON_KEY);
-  const supabaseDbUrl =
-    overrides.supabaseDbUrl ?? normalizeOptionalString(source.SUPABASE_DB_URL);
-  const supabaseJwtSecret =
-    overrides.supabaseJwtSecret ?? normalizeOptionalString(source.SUPABASE_JWT_SECRET);
-  const supabaseServiceRoleKey =
-    overrides.supabaseServiceRoleKey ??
-    normalizeOptionalString(source.SUPABASE_SERVICE_ROLE_KEY);
-  const supabaseProjectId =
-    overrides.supabaseProjectId ??
-    normalizeOptionalString(source.SUPABASE_PROJECT_ID);
+  const databaseUrl =
+    overrides.databaseUrl ??
+    normalizeOptionalString(source.DATABASE_URL) ??
+    normalizeOptionalString(source.POSTGRES_URL);
+  const appJwtSecret =
+    overrides.appJwtSecret ?? normalizeOptionalString(source.APP_JWT_SECRET);
+  const serverPublicUrl =
+    overrides.serverPublicUrl ??
+    normalizeOptionalString(source.LOOMIC_SERVER_PUBLIC_URL) ??
+    normalizeOptionalString(source.NEXT_PUBLIC_SERVER_BASE_URL);
+  const storageRoot =
+    overrides.storageRoot ?? normalizeOptionalString(source.LOOMIC_STORAGE_ROOT);
+  const postgresPoolMax =
+    overrides.postgresPoolMax ??
+    parseOptionalPositiveInt(source.POSTGRES_POOL_MAX, "POSTGRES_POOL_MAX");
   const googleApiKey =
     overrides.googleApiKey ?? normalizeOptionalString(source.GOOGLE_API_KEY);
   const googleApplicationCredentials =
@@ -175,16 +178,15 @@ export function loadServerEnv(
     webOrigin:
       overrides.webOrigin ?? source.LOOMIC_WEB_ORIGIN ?? DEFAULT_WEB_ORIGIN,
     ...(agentFilesRoot ? { agentFilesRoot } : {}),
+    ...(appJwtSecret ? { appJwtSecret } : {}),
+    ...(databaseUrl ? { databaseUrl } : {}),
     ...(googleApiKey ? { googleApiKey } : {}),
     ...(googleApplicationCredentials ? { googleApplicationCredentials } : {}),
     ...(openAIApiBase ? { openAIApiBase } : {}),
     ...(openAIApiKey ? { openAIApiKey } : {}),
-    ...(supabaseUrl ? { supabaseUrl } : {}),
-    ...(supabaseAnonKey ? { supabaseAnonKey } : {}),
-    ...(supabaseDbUrl ? { supabaseDbUrl } : {}),
-    ...(supabaseJwtSecret ? { supabaseJwtSecret } : {}),
-    ...(supabaseServiceRoleKey ? { supabaseServiceRoleKey } : {}),
-    ...(supabaseProjectId ? { supabaseProjectId } : {}),
+    ...(postgresPoolMax ? { postgresPoolMax } : {}),
+    ...(serverPublicUrl ? { serverPublicUrl } : {}),
+    ...(storageRoot ? { storageRoot } : {}),
     ...(googleFontsApiKey ? { googleFontsApiKey } : {}),
     ...(googleVertexProject ? { googleVertexProject } : {}),
     ...(googleVertexLocation ? { googleVertexLocation } : {}),
@@ -249,6 +251,19 @@ function parsePort(rawPort: string | undefined) {
   }
 
   return port;
+}
+
+function parseOptionalPositiveInt(rawValue: string | undefined, name: string) {
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(rawValue, 10);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`Invalid ${name} value: ${rawValue}`);
+  }
+
+  return value;
 }
 
 function readServerVersion() {

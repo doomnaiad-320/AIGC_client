@@ -2,7 +2,7 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
-import type { AdminSupabaseClient } from "../supabase/admin.js";
+import type { AdminDbClient } from "../db/client.js";
 import type {
   PaymentService,
   WebhookPayload,
@@ -11,7 +11,7 @@ import type {
 export async function registerPaymentWebhookRoute(
   app: FastifyInstance,
   options: {
-    getAdminClient: () => AdminSupabaseClient;
+    getAdminClient: () => AdminDbClient;
     paymentService: PaymentService;
     webhookSecret: string;
   },

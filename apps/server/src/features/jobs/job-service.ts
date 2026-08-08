@@ -8,9 +8,9 @@ import type {
 import type { PgmqClient } from "../../queue/pgmq-client.js";
 import type {
   AuthenticatedUser,
-  UserSupabaseClient,
-} from "../../supabase/user.js";
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+  UserDbClient,
+} from "../../auth/user.js";
+import type { AdminDbClient } from "../../db/client.js";
 
 // Queue name mapping
 const QUEUE_MAP: Record<BackgroundJobType, string> = {
@@ -68,8 +68,8 @@ export type JobService = {
 };
 
 export function createJobService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
-  getAdminClient: () => AdminSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
+  getAdminClient: () => AdminDbClient;
   pgmq: PgmqClient;
 }): JobService {
   function mapJobRow(row: Record<string, unknown>): BackgroundJob {

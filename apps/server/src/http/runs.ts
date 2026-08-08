@@ -19,7 +19,7 @@ import {
   type ThreadService,
 } from "../features/chat/thread-service.js";
 import type { SettingsService } from "../features/settings/settings-service.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerRunRoutes(
   app: FastifyInstance,

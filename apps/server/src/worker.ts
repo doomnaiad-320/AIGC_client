@@ -12,12 +12,13 @@ if (process.env.GLOBAL_AGENT_HTTP_PROXY) {
 
 import { randomUUID } from "node:crypto";
 import { loadServerEnv } from "./config/env.js";
+import { getDatabaseUrl } from "./db/postgres.js";
 import { createPgmqClient, type PgmqMessage } from "./queue/pgmq-client.js";
 import { createJobService } from "./features/jobs/job-service.js";
 import { createCreditService, type CreditService } from "./features/credits/credit-service.js";
 import { getExecutor, type ExecutorContext } from "./features/jobs/job-executor.js";
-import { createAdminSupabaseClient } from "./supabase/admin.js";
-import { createUserSupabaseClientFactory } from "./supabase/user.js";
+import { createAdminDbClient } from "./db/client.js";
+import { createUserDbClientFactory } from "./auth/user.js";
 
 // Import executors to trigger registration via side effects
 import "./features/jobs/executors/image-generation.js";
@@ -44,20 +45,21 @@ const VT_BY_QUEUE: Record<string, number> = {
 async function main() {
   const env = loadServerEnv();
 
-  if (!env.supabaseDbUrl) {
-    console.error("SUPABASE_DB_URL is required for worker process.");
+  const databaseUrl = getDatabaseUrl(env);
+  if (!databaseUrl) {
+    console.error("DATABASE_URL is required for worker process.");
     process.exit(1);
   }
 
   // Register all generation providers (shared with app.ts)
   registerAllProviders(env);
 
-  const pgmq = createPgmqClient(env.supabaseDbUrl);
-  const createUserClient = createUserSupabaseClientFactory(env);
+  const pgmq = createPgmqClient(databaseUrl);
+  const createUserClient = createUserDbClientFactory(env);
 
-  let adminClient: ReturnType<typeof createAdminSupabaseClient> | undefined;
+  let adminClient: ReturnType<typeof createAdminDbClient> | undefined;
   const getAdminClient = () => {
-    adminClient ??= createAdminSupabaseClient(env);
+    adminClient ??= createAdminDbClient(env);
     return adminClient;
   };
 

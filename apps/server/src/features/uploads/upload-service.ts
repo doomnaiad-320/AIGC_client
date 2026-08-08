@@ -2,8 +2,8 @@ import type { AssetBucket, AssetObject } from "@loomic/shared";
 
 import type {
   AuthenticatedUser,
-  UserSupabaseClient,
-} from "../../supabase/user.js";
+  UserDbClient,
+} from "../../auth/user.js";
 
 /** Buckets configured as public in Supabase — use getPublicUrl instead of signed URLs */
 const PUBLIC_BUCKETS = new Set(["project-assets"]);
@@ -52,7 +52,7 @@ export type UploadService = {
 const SIGNED_URL_EXPIRY_SECONDS = 3600;
 
 export function createUploadService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
 }): UploadService {
   return {
     async uploadFile(user, input) {
@@ -191,7 +191,7 @@ function buildObjectPath(
 }
 
 async function getAssetUrl(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   bucket: string,
   objectPath: string,
 ): Promise<string> {
@@ -204,7 +204,7 @@ async function getAssetUrl(
 }
 
 async function createSignedUrl(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   bucket: string,
   objectPath: string,
 ): Promise<string> {

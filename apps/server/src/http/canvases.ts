@@ -12,7 +12,7 @@ import {
   CanvasServiceError,
   type CanvasService,
 } from "../features/canvas/canvas-service.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerCanvasRoutes(
   app: FastifyInstance,

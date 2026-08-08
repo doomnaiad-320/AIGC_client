@@ -14,7 +14,7 @@ import {
   ChatServiceError,
   type ChatService,
 } from "../features/chat/chat-service.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerChatRoutes(
   app: FastifyInstance,

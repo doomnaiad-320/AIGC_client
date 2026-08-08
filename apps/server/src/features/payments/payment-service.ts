@@ -2,7 +2,7 @@
 import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
 import { PLAN_CONFIGS } from "@loomic/shared";
 
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+import type { AdminDbClient } from "../../db/client.js";
 import type { LemonSqueezyClient } from "./lemon-squeezy-client.js";
 
 // ── Error ────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ export type WebhookPayload = {
 
 export function createPaymentService(options: {
   lemonSqueezy: LemonSqueezyClient;
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
   variantMap: VariantMap;
   webOrigin: string;
 }): PaymentService {
@@ -414,7 +414,7 @@ export function createPaymentService(options: {
 // ── Helpers ──────────────────────────────────────────────────
 
 async function findWorkspaceByLsSubscription(
-  admin: AdminSupabaseClient,
+  admin: AdminDbClient,
   subscriptionId: string,
 ): Promise<string | null> {
   const { data } = await (admin as any)
@@ -427,7 +427,7 @@ async function findWorkspaceByLsSubscription(
 }
 
 async function grantMonthlyCredits(
-  admin: AdminSupabaseClient,
+  admin: AdminDbClient,
   workspaceId: string,
   plan: SubscriptionPlan,
 ): Promise<void> {

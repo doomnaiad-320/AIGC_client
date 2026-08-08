@@ -25,7 +25,7 @@ import {
   type TierGuard,
 } from "../features/credits/tier-guard.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
-import type { RequestAuthenticator } from "../supabase/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerJobRoutes(
   app: FastifyInstance,

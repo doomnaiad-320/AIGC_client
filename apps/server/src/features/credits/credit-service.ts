@@ -6,7 +6,7 @@ import type {
 } from "@loomic/shared";
 import { PLAN_CONFIGS } from "@loomic/shared";
 
-import type { AdminSupabaseClient } from "../../supabase/admin.js";
+import type { AdminDbClient } from "../../db/client.js";
 
 // ── Error ────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ export type CreditService = {
 // ── Factory ──────────────────────────────────────────────────
 
 export function createCreditService(options: {
-  getAdminClient: () => AdminSupabaseClient;
+  getAdminClient: () => AdminDbClient;
 }): CreditService {
   return {
     async getBalance(workspaceId) {

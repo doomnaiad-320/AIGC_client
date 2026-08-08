@@ -17,15 +17,15 @@ import { importSkillFromUrl, SkillImportError } from "../features/skills/skill-i
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import type {
   RequestAuthenticator,
-  UserSupabaseClient,
-} from "../supabase/user.js";
+  UserDbClient,
+} from "../auth/user.js";
 
 /**
  * Helper to bypass Supabase generated types for tables not yet in the schema
  * (skills, workspace_skills). Returns untyped client so PostgREST queries compile.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const untypedFrom = (client: UserSupabaseClient, table: string) => (client as any).from(table);
+const untypedFrom = (client: UserDbClient, table: string) => (client as any).from(table);
 
 type SkillErrorCode =
   | "skill_not_found"
@@ -43,7 +43,7 @@ export async function registerSkillRoutes(
   app: FastifyInstance,
   options: {
     auth: RequestAuthenticator;
-    createUserClient: (accessToken: string) => UserSupabaseClient;
+    createUserClient: (accessToken: string) => UserDbClient;
     viewerService: ViewerService;
   },
 ) {

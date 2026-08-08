@@ -188,7 +188,8 @@ Edit `.env.local` with your credentials:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SUPABASE_DB_URL=postgresql://postgres:pw@db.your-project.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres:pw@localhost:5432/loomic
+SUPABASE_DB_URL=postgresql://postgres:pw@db.your-project.supabase.co:5432/postgres # legacy fallback
 SUPABASE_PROJECT_ID=your-project-ref
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
@@ -272,14 +273,18 @@ SERVICE_MODE=worker
 WORKER_ID=railway-w1
 ```
 
-Both services share the same environment variables (Supabase, AI keys, etc.).
+Both services share the same environment variables (PostgreSQL, Supabase auth/storage, AI keys, etc.).
 
 The `Dockerfile` at `apps/server/Dockerfile` handles the multi-stage build.
 
-### Database → Supabase
+### Database → PostgreSQL / Supabase
+
+Loomic now reads `DATABASE_URL` first for server-side Postgres features such as
+PGMQ and LangGraph persistence. `SUPABASE_DB_URL` is still supported as a legacy
+fallback while Supabase Auth and Storage are being phased out.
 
 ```bash
-# Apply all migrations
+# Supabase-backed project: apply all migrations
 supabase db push
 
 # Generate TypeScript types (after schema changes)
@@ -370,7 +375,9 @@ Loomic/
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only) |
-| `SUPABASE_DB_URL` | PostgreSQL connection string (for PGMQ) |
+| `DATABASE_URL` | Preferred PostgreSQL connection string for server-side persistence and PGMQ |
+| `POSTGRES_POOL_MAX` | Optional PostgreSQL pool size; defaults to 10 |
+| `SUPABASE_DB_URL` | Legacy PostgreSQL fallback while Supabase services remain enabled |
 | `SUPABASE_PROJECT_ID` | Supabase project reference ID |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL (exposed to frontend) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (exposed to frontend) |

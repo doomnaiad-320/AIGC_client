@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { AuthenticatedUser, UserSupabaseClient } from "../../supabase/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 
 export class ThreadServiceError extends Error {
   readonly statusCode: number;
@@ -27,7 +27,7 @@ export type ThreadService = {
 };
 
 export function createThreadService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
   threadIdFactory?: () => string;
 }): ThreadService {
   const threadIdFactory =

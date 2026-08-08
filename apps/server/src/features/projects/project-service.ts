@@ -10,8 +10,8 @@ import {
 } from "../bootstrap/ensure-user-foundation.js";
 import type {
   AuthenticatedUser,
-  UserSupabaseClient,
-} from "../../supabase/user.js";
+  UserDbClient,
+} from "../../auth/user.js";
 
 const THUMBNAIL_BUCKET = "project-assets";
 const PROJECT_QUERY_FAILED_MESSAGE = "Unable to load projects.";
@@ -86,7 +86,7 @@ export class ProjectServiceError extends Error {
 }
 
 export function createProjectService(options: {
-  createUserClient: (accessToken: string) => UserSupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
   viewerService: ViewerService;
 }): ProjectService {
   return {
@@ -382,7 +382,7 @@ async function ensureFoundation(
 }
 
 async function resolvePersonalWorkspace(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   userId: string,
   errorCode: "project_create_failed" | "project_query_failed",
 ) {
@@ -490,7 +490,7 @@ function slugify(value: string) {
 }
 
 function generateThumbnailUrls(
-  client: UserSupabaseClient,
+  client: UserDbClient,
   projects: Array<{ id: string; thumbnail_path: string | null }>,
 ): Map<string, string> {
   const urlMap = new Map<string, string>();
