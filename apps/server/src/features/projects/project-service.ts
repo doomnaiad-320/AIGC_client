@@ -226,7 +226,8 @@ export function createProjectService(options: {
         );
       }
 
-      if (!projects.length) {
+      const projectRows = (projects ?? []) as any[];
+      if (!projectRows.length) {
         return [];
       }
 
@@ -235,7 +236,7 @@ export function createProjectService(options: {
         .select("id, name, is_primary, project_id")
         .in(
           "project_id",
-          projects.map((project) => project.id),
+          projectRows.map((project: any) => project.id),
         )
         .eq("is_primary", true);
 
@@ -248,16 +249,16 @@ export function createProjectService(options: {
       }
 
       const primaryCanvasByProjectId = new Map(
-        canvases.map((canvas) => [canvas.project_id, canvas]),
+        ((canvases ?? []) as any[]).map((canvas: any) => [canvas.project_id, canvas]),
       );
 
       // Generate public thumbnail URLs for projects that have them
       const thumbnailUrls = generateThumbnailUrls(
         client,
-        projects.filter((p) => p.thumbnail_path),
+        projectRows.filter((p: any) => p.thumbnail_path),
       );
 
-      return projects.map((project) => {
+      return projectRows.map((project: any) => {
         const canvas = primaryCanvasByProjectId.get(project.id);
 
         if (!canvas) {

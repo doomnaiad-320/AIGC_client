@@ -91,7 +91,7 @@ export function createChatService(options: {
         throw new ChatServiceError("chat_error", "Failed to list sessions.", 500);
       }
 
-      return (data ?? []).map((row) => ({
+      return ((data ?? []) as any[]).map((row: any) => ({
         id: row.id,
         title: row.title,
         updatedAt: row.updated_at,
@@ -158,7 +158,7 @@ export function createChatService(options: {
         throw new ChatServiceError("chat_error", "Failed to list messages.", 500);
       }
 
-      const rows = (data ?? []).map((row) => {
+      const rows = ((data ?? []) as any[]).map((row: any) => {
         const contentBlocks =
           Array.isArray(row.content_blocks) && row.content_blocks.length > 0
             ? (row.content_blocks as ContentBlock[])
@@ -180,7 +180,7 @@ export function createChatService(options: {
       // Deduplicate consecutive messages with same role + content
       // (caused by dual client+server save in earlier versions)
       return rows.filter(
-        (msg, i) =>
+        (msg: ChatMessage, i: number) =>
           i === 0 ||
           msg.role !== rows[i - 1]!.role ||
           msg.content !== rows[i - 1]!.content,

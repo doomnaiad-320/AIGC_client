@@ -137,10 +137,10 @@ export function createBrandKitService(options: {
       );
     }
 
-    const mappedAssets = (assets ?? []).map(mapAssetRow);
+    const mappedAssets = ((assets ?? []) as any[]).map(mapAssetRow);
 
     // Resolve signed URLs for file-based assets (logo/image)
-    const fileAssets = mappedAssets.filter((a) => a.file_url);
+    const fileAssets = mappedAssets.filter((a: BrandKitAsset) => a.file_url);
     if (fileAssets.length > 0) {
       const paths = fileAssets.map((a) => a.file_url!);
       const { data: signedData } = await client.storage
@@ -190,7 +190,8 @@ export function createBrandKitService(options: {
         );
       }
 
-      if (!kits.length) {
+      const kitRows = (kits ?? []) as any[];
+      if (!kitRows.length) {
         return [];
       }
 
@@ -199,7 +200,7 @@ export function createBrandKitService(options: {
         .select("kit_id, asset_type")
         .in(
           "kit_id",
-          kits.map((k) => k.id),
+          kitRows.map((k: any) => k.id),
         );
 
       if (assetsError) {
@@ -215,16 +216,18 @@ export function createBrandKitService(options: {
         { color: number; font: number; logo: number; image: number }
       >();
 
-      for (const asset of assets ?? []) {
+      for (const asset of (assets ?? []) as any[]) {
         let counts = countsByKit.get(asset.kit_id);
         if (!counts) {
           counts = { color: 0, font: 0, logo: 0, image: 0 };
           countsByKit.set(asset.kit_id, counts);
         }
-        counts[asset.asset_type] += 1;
+        if (asset.asset_type in counts) {
+          counts[asset.asset_type as keyof typeof counts] += 1;
+        }
       }
 
-      return kits.map((kit): BrandKitSummary => ({
+      return kitRows.map((kit: any): BrandKitSummary => ({
         id: kit.id,
         name: kit.name,
         is_default: kit.is_default,
@@ -350,8 +353,9 @@ export function createBrandKitService(options: {
         .eq("kit_id", kitId)
         .not("file_url", "is", null);
 
-      if (fileAssets && fileAssets.length > 0) {
-        const paths = fileAssets
+      const fileAssetRows = (fileAssets ?? []) as Array<{ file_url: string | null }>;
+      if (fileAssetRows.length > 0) {
+        const paths = fileAssetRows
           .map((a) => a.file_url)
           .filter((p): p is string => !!p);
         if (paths.length > 0) {

@@ -186,7 +186,7 @@ export function createJobService(options: {
       if (error) {
         throw new JobServiceError("job_query_failed", "Failed to list jobs.", 500);
       }
-      return (jobs ?? []).map((row) =>
+      return ((jobs ?? []) as any[]).map((row: any) =>
         mapJobRow(row as unknown as Record<string, unknown>),
       );
     },
