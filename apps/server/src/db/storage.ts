@@ -97,7 +97,7 @@ export function registerLocalStorageRoutes(
       return reply.code(404).send({ message: "Asset not found." });
     }
 
-    return reply.send(createReadStream(filePath));
+    return reply.type(contentTypeForPath(objectPath)).send(createReadStream(filePath));
   });
 }
 
@@ -268,4 +268,30 @@ function isValidSignature(
 
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function contentTypeForPath(objectPath: string) {
+  switch (path.extname(objectPath).toLowerCase()) {
+    case ".avif":
+      return "image/avif";
+    case ".gif":
+      return "image/gif";
+    case ".jpeg":
+    case ".jpg":
+      return "image/jpeg";
+    case ".png":
+      return "image/png";
+    case ".svg":
+      return "image/svg+xml";
+    case ".webp":
+      return "image/webp";
+    case ".mp4":
+      return "video/mp4";
+    case ".webm":
+      return "video/webm";
+    case ".json":
+      return "application/json";
+    default:
+      return "application/octet-stream";
+  }
 }

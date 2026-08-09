@@ -8,9 +8,13 @@ import { useState, type FormEvent } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Separator } from "./ui/separator";
-import { fetchViewer } from "../lib/server-api";
-import { getSupabaseBrowserClient } from "../lib/supabase-browser";
+import { saveAuthSession } from "../lib/auth-context";
+import {
+  ApiApplicationError,
+  ApiAuthError,
+  fetchViewer,
+  registerWithPassword,
+} from "../lib/server-api";
 
 const stagger = {
   hidden: {},
@@ -28,15 +32,19 @@ export function RegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function bootstrapWorkspace(accessToken: string) {
+  async function bootstrapWorkspace(session: Awaited<ReturnType<typeof registerWithPassword>>["session"]) {
     try {
-      await fetchViewer(accessToken);
+      await fetchViewer(session.access_token);
+      saveAuthSession(session);
       router.replace("/home");
-    } catch {
-      setError("Could not finish creating your workspace. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiAuthError || err instanceof ApiApplicationError) {
+        setError(err.message);
+      } else {
+        setError("Could not finish creating your workspace. Please try again.");
+      }
     }
   }
 
@@ -52,69 +60,19 @@ export function RegisterForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = getSupabaseBrowserClient();
-    const { data, error: authError } = await supabase.auth.signUp({
-      email: trimmed,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (authError) {
+    try {
+      const { session } = await registerWithPassword({ email: trimmed, password });
+      await bootstrapWorkspace(session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create account. Please try again.");
+    } finally {
       setLoading(false);
-      setError(authError.message);
-      return;
     }
-
-    const accessToken = data.session?.access_token;
-    if (accessToken) {
-      await bootstrapWorkspace(accessToken);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(false);
-    setSent(true);
   }
 
   return (
     <div className="w-full max-w-sm">
       <AnimatePresence mode="wait">
-        {sent ? (
-          <motion.div
-            key="sent"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="flex flex-col items-center gap-4 text-center"
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 15 }}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground"
-            >
-              <svg viewBox="0 0 24 24" className="h-6 w-6 text-background" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <motion.path
-                  d="M5 13l4 4L19 7"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ delay: 0.5, duration: 0.4, ease: "easeOut" }}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </motion.div>
-            <h2 className="text-lg font-semibold">Check your email</h2>
-            <p className="text-sm text-muted-foreground">
-              We sent a confirmation link to <strong>{email}</strong>
-            </p>
-            <Link href="/login" className="text-sm text-foreground underline underline-offset-4">
-              Back to sign in
-            </Link>
-          </motion.div>
-        ) : (
           <motion.div
             key="form"
             variants={stagger}
@@ -183,12 +141,6 @@ export function RegisterForm() {
               )}
             </AnimatePresence>
 
-            <motion.div variants={fadeIn} className="flex items-center gap-4">
-              <Separator className="flex-1" />
-              <span className="text-xs uppercase text-muted-foreground">or</span>
-              <Separator className="flex-1" />
-            </motion.div>
-
             <motion.p variants={fadeIn} className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link href="/login" className="font-medium text-foreground underline underline-offset-4">
@@ -196,7 +148,6 @@ export function RegisterForm() {
               </Link>
             </motion.p>
           </motion.div>
-        )}
       </AnimatePresence>
     </div>
   );

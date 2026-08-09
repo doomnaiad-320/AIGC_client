@@ -108,7 +108,7 @@ export async function registerGenerateRoutes(
         ...(payload.quality ? { quality: payload.quality } : {}),
       });
 
-      // Download and persist to Supabase Storage
+      // Download and persist to local asset storage.
       const { signedUrl, assetId } = await downloadAndUpload(
         result.url,
         result.mimeType,

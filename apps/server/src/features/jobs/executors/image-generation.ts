@@ -108,7 +108,7 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
       }
     }
 
-    // Upload to Supabase Storage under the project-assets bucket
+    // Persist under the local project-assets bucket.
     const timestamp = Date.now();
     const objectPath = `${workspaceId}/generated/${timestamp}-${jobId}.png`;
 

@@ -1,23 +1,19 @@
--- Loomic Supabase Foundation V1
--- Target hosted project ref: ndbwtngvypwgqexcirdo
---
+-- Loomic PostgreSQL Foundation V1
 -- Checklist:
+-- - public.app_users
 -- - public.profiles
 -- - public.workspaces
 -- - public.workspace_members
 -- - public.projects
 -- - public.canvases
 -- - public.asset_objects
--- - first-login bootstrap helper functions + auth.users trigger
+-- - first-login bootstrap helper functions + public.app_users trigger
 -- - workspace-membership-based RLS policies
--- - storage buckets: project-assets, user-avatars
--- - storage.objects policies scoped by workspace membership or user ownership
 
 create extension if not exists pgcrypto with schema extensions;
 create schema if not exists private;
 
 revoke all on schema private from public;
-grant usage on schema private to authenticated;
 
 do $$
 begin
@@ -76,8 +72,39 @@ exception
 end;
 $$;
 
+create or replace function private.current_user_id()
+returns uuid
+language sql
+stable
+set search_path = ''
+as $$
+  select nullif(current_setting('app.user_id', true), '')::uuid;
+$$;
+
+create or replace function private.is_service_role()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(current_setting('app.is_service_role', true), '') = 'true';
+$$;
+
+create table if not exists public.app_users (
+  id uuid primary key default extensions.gen_random_uuid(),
+  email text not null,
+  password_hash text not null,
+  user_metadata jsonb not null default '{}'::jsonb,
+  last_sign_in_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint app_users_email_key unique (email),
+  constraint app_users_email_not_blank check (char_length(btrim(email)) > 0),
+  constraint app_users_password_hash_not_blank check (char_length(btrim(password_hash)) > 0)
+);
+
 create table if not exists public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
+  id uuid primary key references public.app_users (id) on delete cascade,
   email text,
   display_name text,
   avatar_url text,
@@ -89,14 +116,14 @@ create table if not exists public.workspaces (
   id uuid primary key default extensions.gen_random_uuid(),
   type public.workspace_type not null,
   name text not null check (char_length(btrim(name)) > 0),
-  owner_user_id uuid not null references auth.users (id) on delete cascade,
+  owner_user_id uuid not null references public.app_users (id) on delete cascade,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
 
 create table if not exists public.workspace_members (
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
-  user_id uuid not null references auth.users (id) on delete cascade,
+  user_id uuid not null references public.app_users (id) on delete cascade,
   role public.workspace_member_role not null default 'member',
   created_at timestamptz not null default timezone('utc', now()),
   primary key (workspace_id, user_id)
@@ -108,7 +135,7 @@ create table if not exists public.projects (
   name text not null check (char_length(btrim(name)) > 0),
   slug text not null check (char_length(btrim(slug)) > 0),
   description text,
-  created_by uuid references auth.users (id) on delete set null,
+  created_by uuid references public.app_users (id) on delete set null,
   archived_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -121,7 +148,7 @@ create table if not exists public.canvases (
   project_id uuid not null references public.projects (id) on delete cascade,
   name text not null check (char_length(btrim(name)) > 0),
   is_primary boolean not null default false,
-  created_by uuid references auth.users (id) on delete set null,
+  created_by uuid references public.app_users (id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -134,7 +161,7 @@ create table if not exists public.asset_objects (
   object_path text not null check (char_length(btrim(object_path)) > 0),
   mime_type text,
   byte_size bigint check (byte_size is null or byte_size >= 0),
-  created_by uuid references auth.users (id) on delete set null,
+  created_by uuid references public.app_users (id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
   constraint asset_objects_bucket_object_path_key unique (bucket, object_path),
   constraint asset_objects_project_workspace_fkey
@@ -191,12 +218,12 @@ security definer
 set search_path = ''
 as $$
   select
-    (select auth.uid()) is not null
+    (select private.current_user_id()) is not null
     and exists (
       select 1
       from public.workspace_members wm
       where wm.workspace_id = p_workspace_id
-        and wm.user_id = (select auth.uid())
+        and wm.user_id = (select private.current_user_id())
     );
 $$;
 
@@ -208,12 +235,12 @@ security definer
 set search_path = ''
 as $$
   select
-    (select auth.uid()) is not null
+    (select private.current_user_id()) is not null
     and exists (
       select 1
       from public.workspaces w
       where w.id = p_workspace_id
-        and w.owner_user_id = (select auth.uid())
+        and w.owner_user_id = (select private.current_user_id())
     );
 $$;
 
@@ -225,14 +252,14 @@ security definer
 set search_path = ''
 as $$
   select
-    (select auth.uid()) is not null
+    (select private.current_user_id()) is not null
     and exists (
       select 1
       from public.projects p
       join public.workspace_members wm
         on wm.workspace_id = p.workspace_id
       where p.id = p_project_id
-        and wm.user_id = (select auth.uid())
+        and wm.user_id = (select private.current_user_id())
     );
 $$;
 
@@ -333,7 +360,7 @@ begin
   perform private.bootstrap_user_foundation(
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data, '{}'::jsonb)
+    coalesce(new.user_metadata, '{}'::jsonb)
   );
 
   return new;
@@ -346,9 +373,9 @@ $$;
 
 revoke all on function public.handle_new_user() from public, anon, authenticated;
 
-drop trigger if exists on_auth_user_created on auth.users;
+drop trigger if exists on_auth_user_created on public.app_users;
 create trigger on_auth_user_created
-after insert on auth.users
+after insert on public.app_users
 for each row
 execute function public.handle_new_user();
 
@@ -364,22 +391,22 @@ create policy "profiles_select_own"
 on public.profiles
 for select
 to authenticated
-using ((select auth.uid()) is not null and id = (select auth.uid()));
+using ((select private.current_user_id()) is not null and id = (select private.current_user_id()));
 
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own"
 on public.profiles
 for insert
 to authenticated
-with check ((select auth.uid()) is not null and id = (select auth.uid()));
+with check ((select private.current_user_id()) is not null and id = (select private.current_user_id()));
 
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own"
 on public.profiles
 for update
 to authenticated
-using ((select auth.uid()) is not null and id = (select auth.uid()))
-with check ((select auth.uid()) is not null and id = (select auth.uid()));
+using ((select private.current_user_id()) is not null and id = (select private.current_user_id()))
+with check ((select private.current_user_id()) is not null and id = (select private.current_user_id()));
 
 drop policy if exists "workspaces_select_member" on public.workspaces;
 create policy "workspaces_select_member"
@@ -393,22 +420,22 @@ create policy "workspaces_insert_owner"
 on public.workspaces
 for insert
 to authenticated
-with check ((select auth.uid()) is not null and owner_user_id = (select auth.uid()));
+with check ((select private.current_user_id()) is not null and owner_user_id = (select private.current_user_id()));
 
 drop policy if exists "workspaces_update_owner" on public.workspaces;
 create policy "workspaces_update_owner"
 on public.workspaces
 for update
 to authenticated
-using ((select auth.uid()) is not null and owner_user_id = (select auth.uid()))
-with check ((select auth.uid()) is not null and owner_user_id = (select auth.uid()));
+using ((select private.current_user_id()) is not null and owner_user_id = (select private.current_user_id()))
+with check ((select private.current_user_id()) is not null and owner_user_id = (select private.current_user_id()));
 
 drop policy if exists "workspaces_delete_owner" on public.workspaces;
 create policy "workspaces_delete_owner"
 on public.workspaces
 for delete
 to authenticated
-using ((select auth.uid()) is not null and owner_user_id = (select auth.uid()));
+using ((select private.current_user_id()) is not null and owner_user_id = (select private.current_user_id()));
 
 drop policy if exists "workspace_members_select_member" on public.workspace_members;
 create policy "workspace_members_select_member"
@@ -453,7 +480,7 @@ for insert
 to authenticated
 with check (
   (select private.is_workspace_member(workspace_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
 );
 
 drop policy if exists "projects_update_member" on public.projects;
@@ -485,7 +512,7 @@ for insert
 to authenticated
 with check (
   (select private.is_project_member(project_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
 );
 
 drop policy if exists "canvases_update_member" on public.canvases;
@@ -517,7 +544,7 @@ for insert
 to authenticated
 with check (
   (select private.is_workspace_member(workspace_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
   and (select private.asset_object_project_matches_workspace(project_id, workspace_id))
 );
 
@@ -551,115 +578,19 @@ grant execute on function private.is_workspace_owner(uuid) to authenticated;
 grant execute on function private.is_project_member(uuid) to authenticated;
 grant execute on function private.asset_object_project_matches_workspace(uuid, uuid) to authenticated;
 
-insert into storage.buckets (id, name, public)
-values
-  ('project-assets', 'project-assets', true),
-  ('user-avatars', 'user-avatars', false)
-on conflict (id) do update
-set name = excluded.name,
-    public = excluded.public;
-
-drop policy if exists "project_assets_select_member" on storage.objects;
-create policy "project_assets_select_member"
-on storage.objects
-for select
-to authenticated
-using (
-  bucket_id = 'project-assets'
-  and (select private.is_workspace_member(private.try_parse_uuid((storage.foldername(name))[1])))
-);
-
-drop policy if exists "project_assets_insert_member" on storage.objects;
-create policy "project_assets_insert_member"
-on storage.objects
-for insert
-to authenticated
-with check (
-  bucket_id = 'project-assets'
-  and (select private.is_workspace_member(private.try_parse_uuid((storage.foldername(name))[1])))
-);
-
-drop policy if exists "project_assets_update_member" on storage.objects;
-create policy "project_assets_update_member"
-on storage.objects
-for update
-to authenticated
-using (
-  bucket_id = 'project-assets'
-  and (select private.is_workspace_member(private.try_parse_uuid((storage.foldername(name))[1])))
-)
-with check (
-  bucket_id = 'project-assets'
-  and (select private.is_workspace_member(private.try_parse_uuid((storage.foldername(name))[1])))
-);
-
-drop policy if exists "project_assets_delete_member" on storage.objects;
-create policy "project_assets_delete_member"
-on storage.objects
-for delete
-to authenticated
-using (
-  bucket_id = 'project-assets'
-  and (select private.is_workspace_member(private.try_parse_uuid((storage.foldername(name))[1])))
-);
-
-drop policy if exists "user_avatars_select_owner" on storage.objects;
-create policy "user_avatars_select_owner"
-on storage.objects
-for select
-to authenticated
-using (
-  bucket_id = 'user-avatars'
-  and private.try_parse_uuid((storage.foldername(name))[1]) = (select auth.uid())
-);
-
-drop policy if exists "user_avatars_insert_owner" on storage.objects;
-create policy "user_avatars_insert_owner"
-on storage.objects
-for insert
-to authenticated
-with check (
-  bucket_id = 'user-avatars'
-  and private.try_parse_uuid((storage.foldername(name))[1]) = (select auth.uid())
-);
-
-drop policy if exists "user_avatars_update_owner" on storage.objects;
-create policy "user_avatars_update_owner"
-on storage.objects
-for update
-to authenticated
-using (
-  bucket_id = 'user-avatars'
-  and private.try_parse_uuid((storage.foldername(name))[1]) = (select auth.uid())
-)
-with check (
-  bucket_id = 'user-avatars'
-  and private.try_parse_uuid((storage.foldername(name))[1]) = (select auth.uid())
-);
-
-drop policy if exists "user_avatars_delete_owner" on storage.objects;
-create policy "user_avatars_delete_owner"
-on storage.objects
-for delete
-to authenticated
-using (
-  bucket_id = 'user-avatars'
-  and private.try_parse_uuid((storage.foldername(name))[1]) = (select auth.uid())
-);
-
 do $$
 declare
   v_user record;
 begin
   for v_user in
-    select u.id, u.email, u.raw_user_meta_data
-    from auth.users u
+    select u.id, u.email, u.user_metadata
+    from public.app_users u
   loop
     begin
       perform private.bootstrap_user_foundation(
         v_user.id,
         v_user.email,
-        coalesce(v_user.raw_user_meta_data, '{}'::jsonb)
+        coalesce(v_user.user_metadata, '{}'::jsonb)
       );
     exception
       when others then

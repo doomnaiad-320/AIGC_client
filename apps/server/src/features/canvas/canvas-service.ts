@@ -27,7 +27,7 @@ export type CanvasService = {
 };
 
 /**
- * Marker prefix for files that have been extracted to Supabase Storage.
+ * Marker prefix for files that have been extracted to local asset storage.
  * Format: `oss://bucket/objectPath`
  */
 const OSS_MARKER_PREFIX = "oss://";
@@ -81,7 +81,7 @@ export function createCanvasService(options: {
 }
 
 // ---------------------------------------------------------------------------
-// File extraction (save path): base64 dataURL → Supabase Storage + oss:// marker
+// File extraction (save path): base64 dataURL -> local storage + oss:// marker
 // ---------------------------------------------------------------------------
 
 type CanvasFileRecord = Record<string, Record<string, unknown>>;

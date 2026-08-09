@@ -191,7 +191,7 @@ const VIDEO_MAX_SIZE = 800;
  * Insert an image element into a canvas. Reads current content, appends element
  * with auto-placement (or explicit placement), writes it back.
  *
- * The image file is already in Supabase Storage (uploaded by worker executor).
+ * The image file is already in local asset storage (uploaded by the worker).
  * We download it and embed as base64 dataURL in the canvas files map so
  * Excalidraw can render it natively (consistent with frontend-inserted images).
  */

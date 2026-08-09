@@ -7,10 +7,13 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "biome check .",
+    "db:migrate": "node scripts/apply-postgres-migrations.mjs",
+    "db:seed": "node scripts/seed-test-accounts.mjs",
+    "test:postgres-smoke": "node scripts/smoke-postgres-local.mjs",
     "test:workspace": "node --test tests/workspace.test.mjs",
     "test:packages": "turbo run test",
     "test": "pnpm run test:workspace && pnpm run test:packages",
-    "seed": "node scripts/seed-test-accounts.mjs",
+    "seed": "pnpm db:seed",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
@@ -20,7 +23,7 @@
     "vitest": "^3.0.7"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.57.0",
-    "global-agent": "^4.1.3"
+    "global-agent": "^4.1.3",
+    "pg": "^8.20.0"
   }
 }

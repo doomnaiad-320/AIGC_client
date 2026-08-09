@@ -11,21 +11,31 @@
  *   tsx scripts/debug-session.ts "http://localhost:3000/canvas?id=xxx&session=yyy"
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? "http://127.0.0.1:54321";
-const SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";
-const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WO_o0BQXhz7IftHg_H3a5HDNY95MpVsXBTXc";
+import { readFile } from "node:fs/promises";
 
-async function query(table: string, params: string) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
-    headers: {
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      apikey: ANON_KEY,
-    },
-  });
-  return res.json();
+import pg from "pg";
+
+async function loadEnv() {
+  try {
+    const content = await readFile(".env.local", "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const separator = trimmed.indexOf("=");
+      if (separator < 1) continue;
+      const key = trimmed.slice(0, separator).trim();
+      let value = trimmed.slice(separator + 1).trim();
+      if (
+        (value.startsWith("\"") && value.endsWith("\"")) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] ??= value;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
 }
 
 function parseSessionId(input: string): { sessionId: string; canvasId?: string } {
@@ -63,6 +73,18 @@ const C = {
 };
 
 async function main() {
+  await loadEnv();
+  const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required.");
+  }
+
+  const client = new pg.Client({
+    application_name: "loomic-debug-session",
+    connectionString,
+  });
+  await client.connect();
+
   const raw = process.argv[2];
   if (!raw) {
     console.error("Usage: tsx scripts/debug-session.ts <session_id|canvas_url>");
@@ -75,10 +97,16 @@ async function main() {
   console.log();
 
   // Fetch messages
-  const msgs = await query(
-    "chat_messages",
-    `session_id=eq.${sessionId}&order=created_at.asc&select=role,content,content_blocks,created_at`,
+  const messageResult = await client.query(
+    `
+      select role, content, content_blocks, created_at
+      from public.chat_messages
+      where session_id = $1
+      order by created_at asc
+    `,
+    [sessionId],
   );
+  const msgs = messageResult.rows;
 
   if (!Array.isArray(msgs) || msgs.length === 0) {
     console.log(`${C.red}No messages found for this session.${C.reset}`);
@@ -188,7 +216,11 @@ async function main() {
   // Canvas element summary
   if (canvasId) {
     console.log(`${C.bold}━━━ CANVAS STATE ━━━${C.reset}`);
-    const canvases = await query("canvases", `id=eq.${canvasId}&select=content`);
+    const canvasResult = await client.query(
+      "select content from public.canvases where id = $1",
+      [canvasId],
+    );
+    const canvases = canvasResult.rows;
     if (canvases?.[0]?.content) {
       const elements = canvases[0].content.elements ?? [];
       console.log(`Elements: ${elements.length}\n`);
@@ -202,6 +234,8 @@ async function main() {
       }
     }
   }
+
+  await client.end();
 }
 
 main().catch(console.error);

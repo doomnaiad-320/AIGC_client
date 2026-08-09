@@ -5,26 +5,14 @@ import type { FastifyInstance } from "fastify";
  * Used by the frontend to load generated images into Excalidraw canvas.
  */
 export function registerImageProxyRoute(app: FastifyInstance) {
-  // Build allowed domains list: static CDNs + dynamic Supabase host
   const staticAllowed = [
     "replicate.delivery",
     "replicate.com",
     "pbxt.replicate.delivery",
-    "supabase.co",
+    "oaidalleapiprodscus.blob.core.windows.net",
   ];
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const dynamicAllowed = supabaseUrl
-    ? (() => {
-        try {
-          return [new URL(supabaseUrl).hostname];
-        } catch {
-          return [];
-        }
-      })()
-    : [];
-
-  const allowed = [...staticAllowed, ...dynamicAllowed];
+  const allowed = staticAllowed;
 
   app.get<{
     Querystring: { url: string };

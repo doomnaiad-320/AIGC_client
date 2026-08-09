@@ -2,8 +2,9 @@ import { realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import { tool } from "@langchain/core/tools";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+
+import type { UserDbClient } from "../../db/client.js";
 
 const MIME_MAP: Record<string, string> = {
   ".png": "image/png",
@@ -30,7 +31,7 @@ const persistSandboxFileSchema = z.object({
 });
 
 export type PersistSandboxFileDeps = {
-  createUserClient: (accessToken: string) => SupabaseClient;
+  createUserClient: (accessToken: string) => UserDbClient;
   sandboxDir?: string;
 };
 
@@ -79,8 +80,7 @@ export function createPersistSandboxFileTool(deps: PersistSandboxFileDeps) {
 
         const client = deps.createUserClient(accessToken);
 
-        // Resolve workspace ID from canvas for Storage RLS compliance.
-        // RLS requires: storage.foldername(name)[1] = workspace_id
+        // Resolve workspace ID from canvas so generated files are grouped by tenant.
         let workspaceId: string | null = null;
         if (canvasId) {
           const { data: canvas } = await client
@@ -101,8 +101,8 @@ export function createPersistSandboxFileTool(deps: PersistSandboxFileDeps) {
             upsert: false,
           });
 
-        if (error) {
-          return `Error uploading file: ${error.message}`;
+        if (error || !data) {
+          return `Error uploading file: ${error?.message ?? "missing upload result"}`;
         }
 
         const signedResult = await client.storage

@@ -1,194 +1,183 @@
 #!/usr/bin/env node
-/**
- * Seed test accounts for Loomic open-source deployment.
- *
- * Creates 4 test users across different plan tiers so you can immediately
- * explore the full product without setting up payments.
- *
- * Usage:
- *   node scripts/seed-test-accounts.mjs
- *
- * Requires .env.local (or env vars) with:
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- */
 
+import { randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createClient } from "@supabase/supabase-js";
+import { promisify } from "node:util";
 
-// ── Config ───────────────────────────────────────────────────────────
+import pg from "pg";
 
+const scrypt = promisify(scryptCallback);
+const PASSWORD = "opensourceloomic";
 const TEST_ACCOUNTS = [
-  { email: "free@test.loomic.com",    plan: "free",    credits: 50    },
-  { email: "starter@test.loomic.com", plan: "starter", credits: 1_200 },
-  { email: "pro@test.loomic.com",     plan: "pro",     credits: 5_000 },
-  { email: "ultra@test.loomic.com",   plan: "ultra",   credits: 15_000 },
+  { credits: 50, email: "free@test.loomic.com", plan: "free" },
+  { credits: 1_200, email: "starter@test.loomic.com", plan: "starter" },
+  { credits: 5_000, email: "pro@test.loomic.com", plan: "pro" },
+  { credits: 15_000, email: "ultra@test.loomic.com", plan: "ultra" },
 ];
 
-const PASSWORD = "opensourceloomic";
-
-// ── Load env ─────────────────────────────────────────────────────────
-
 async function loadEnv() {
-  // Try .env.local first, then fall back to process.env
-  for (const envFile of [".env.local", ".env.cloud"]) {
+  for (const envFile of [".env.local", ".env"]) {
     try {
       const content = await readFile(envFile, "utf8");
       for (const line of content.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
-        const eqIdx = trimmed.indexOf("=");
-        if (eqIdx < 0) continue;
-        const key = trimmed.slice(0, eqIdx).trim();
-        let val = trimmed.slice(eqIdx + 1).trim();
-        // Strip surrounding quotes
-        if ((val.startsWith("'") && val.endsWith("'")) ||
-            (val.startsWith('"') && val.endsWith('"'))) {
-          val = val.slice(1, -1);
+        const separator = trimmed.indexOf("=");
+        if (separator < 1) continue;
+
+        const key = trimmed.slice(0, separator).trim();
+        let value = trimmed.slice(separator + 1).trim();
+        if (
+          (value.startsWith("\"") && value.endsWith("\"")) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
+          value = value.slice(1, -1);
         }
-        if (!process.env[key]) process.env[key] = val;
+        process.env[key] ??= value;
       }
-    } catch {
-      // File not found, skip
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
     }
   }
 }
 
-// ── Main ─────────────────────────────────────────────────────────────
+async function hashPassword(password) {
+  const salt = randomBytes(16).toString("base64url");
+  const derived = await scrypt(password, salt, 64);
+  return `scrypt$${salt}$${Buffer.from(derived).toString("base64url")}`;
+}
+
+async function seedAccount(client, account) {
+  const displayName = `${account.plan[0].toUpperCase()}${account.plan.slice(1)} Tester`;
+  const passwordHash = await hashPassword(PASSWORD);
+
+  await client.query("begin");
+  try {
+    await client.query("select set_config('app.is_service_role', 'true', true)");
+    const userResult = await client.query(
+      `
+        insert into public.app_users (email, password_hash, user_metadata)
+        values ($1, $2, jsonb_build_object('display_name', $3::text))
+        on conflict (email) do update
+        set password_hash = excluded.password_hash,
+            user_metadata = excluded.user_metadata,
+            updated_at = timezone('utc', now())
+        returning id, email, user_metadata
+      `,
+      [account.email, passwordHash, displayName],
+    );
+    const user = userResult.rows[0];
+
+    const workspaceResult = await client.query(
+      "select public.bootstrap_viewer($1::uuid, $2::text, $3::jsonb) as workspace_id",
+      [user.id, user.email, JSON.stringify(user.user_metadata)],
+    );
+    const workspaceId = workspaceResult.rows[0].workspace_id;
+
+    await client.query(
+      `
+        insert into public.subscriptions (workspace_id, plan)
+        values ($1, $2::public.subscription_plan)
+        on conflict (workspace_id) do update
+        set plan = excluded.plan,
+            updated_at = now()
+      `,
+      [workspaceId, account.plan],
+    );
+
+    const balanceResult = await client.query(
+      "select balance from public.credit_balances where workspace_id = $1 for update",
+      [workspaceId],
+    );
+    const previousBalance = balanceResult.rows[0]?.balance ?? 0;
+
+    await client.query(
+      `
+        insert into public.credit_balances (workspace_id, balance, version)
+        values ($1, $2, 1)
+        on conflict (workspace_id) do update
+        set balance = excluded.balance,
+            version = public.credit_balances.version + 1,
+            updated_at = now()
+      `,
+      [workspaceId, account.credits],
+    );
+
+    const adjustment = account.credits - previousBalance;
+    if (adjustment !== 0) {
+      await client.query(
+        `
+          insert into public.credit_transactions (
+            workspace_id,
+            user_id,
+            transaction_type,
+            amount,
+            balance_after,
+            description,
+            metadata
+          ) values ($1, $2, 'admin_adjustment', $3, $4, $5, $6::jsonb)
+        `,
+        [
+          workspaceId,
+          user.id,
+          adjustment,
+          account.credits,
+          "Local test account seed",
+          JSON.stringify({ source: "scripts/seed-test-accounts.mjs" }),
+        ],
+      );
+    }
+
+    if (account.plan === "free") {
+      await client.query(
+        `
+          insert into public.daily_credit_claims (
+            workspace_id,
+            claim_date,
+            amount
+          ) values ($1, current_date, 0)
+          on conflict (workspace_id, claim_date) do nothing
+        `,
+        [workspaceId],
+      );
+    }
+
+    await client.query("commit");
+    return { userId: user.id, workspaceId };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
+}
 
 async function main() {
   await loadEnv();
-
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-    console.error("Set them in .env.local or as environment variables.");
-    process.exit(1);
+  const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required. Run pnpm db:migrate first.");
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const client = new pg.Client({
+    application_name: "loomic-seed",
+    connectionString,
   });
-
-  console.log("Seeding test accounts...\n");
-
-  for (const account of TEST_ACCOUNTS) {
-    const label = `${account.email} (${account.plan})`;
-
-    // 1. Create auth user (or skip if exists)
-    const { data: existingUsers } = await admin.auth.admin.listUsers();
-    const existing = existingUsers?.users?.find(u => u.email === account.email);
-
-    let userId;
-    if (existing) {
-      userId = existing.id;
-      console.log(`  [skip] ${label} — already exists (${userId})`);
-    } else {
-      const { data, error } = await admin.auth.admin.createUser({
-        email: account.email,
-        password: PASSWORD,
-        email_confirm: true,
-        user_metadata: {
-          display_name: account.plan.charAt(0).toUpperCase() + account.plan.slice(1) + " Tester",
-        },
-      });
-      if (error) {
-        console.error(`  [fail] ${label} — ${error.message}`);
-        continue;
-      }
-      userId = data.user.id;
-      console.log(`  [created] ${label} — user ${userId}`);
-
-      // Wait for triggers to fire (profile, workspace, subscription, credit_balance)
-      await sleep(1500);
-    }
-
-    // 2. Find the user's personal workspace
-    const { data: workspace, error: wsError } = await admin
-      .from("workspaces")
-      .select("id")
-      .eq("owner_user_id", userId)
-      .eq("type", "personal")
-      .single();
-
-    if (wsError || !workspace) {
-      console.error(`  [fail] ${label} — workspace not found: ${wsError?.message}`);
-      continue;
-    }
-
-    // 3. Check current plan — skip if already seeded
-    const { data: sub } = await admin
-      .from("subscriptions")
-      .select("plan")
-      .eq("workspace_id", workspace.id)
-      .single();
-
-    if (sub && sub.plan === account.plan && account.plan !== "free") {
-      console.log(`  [skip] ${label} — already on ${account.plan} plan\n`);
-      continue;
-    }
-
-    // 4. Upgrade plan & grant credits
-    if (account.plan === "free") {
-      // Free plan: set initial credits directly
-      const { data: balance } = await admin
-        .from("credit_balances")
-        .select("balance")
-        .eq("workspace_id", workspace.id)
-        .single();
-
-      if (balance && balance.balance === 0) {
-        await admin
-          .from("credit_balances")
-          .update({ balance: account.credits, version: 1 })
-          .eq("workspace_id", workspace.id);
-
-        await admin.from("credit_transactions").insert({
-          workspace_id: workspace.id,
-          user_id: userId,
-          transaction_type: "admin_adjustment",
-          amount: account.credits,
-          balance_after: account.credits,
-          description: "Seed: initial free-tier credits",
-        });
-      }
-      console.log(`  [done] ${label} — ${account.credits} credits\n`);
-    } else {
-      // Paid plans: use grant_plan_credits RPC (atomic plan + credits)
-      const { data: newBalance, error: rpcError } = await admin.rpc(
-        "grant_plan_credits",
-        {
-          p_workspace_id: workspace.id,
-          p_plan: account.plan,
-          p_credits: account.credits,
-        },
+  await client.connect();
+  try {
+    console.log("Seeding local PostgreSQL test accounts...");
+    for (const account of TEST_ACCOUNTS) {
+      const result = await seedAccount(client, account);
+      console.log(
+        `[ready] ${account.email} plan=${account.plan} credits=${account.credits} user=${result.userId}`,
       );
-
-      if (rpcError) {
-        console.error(`  [fail] ${label} — grant_plan_credits: ${rpcError.message}`);
-        continue;
-      }
-      console.log(`  [done] ${label} — plan=${account.plan}, balance=${newBalance}\n`);
     }
+  } finally {
+    await client.end();
   }
 
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Test accounts ready! Login with password: " + PASSWORD);
-  console.log("");
-  console.log("  Email                     │ Plan    │ Credits");
-  console.log("  ──────────────────────────┼─────────┼────────");
-  for (const a of TEST_ACCOUNTS) {
-    console.log(`  ${a.email.padEnd(25)} │ ${a.plan.padEnd(7)} │ ${String(a.credits).padStart(6)}`);
-  }
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(`Password for all test accounts: ${PASSWORD}`);
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-main().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
+main().catch((error) => {
+  console.error(`Seed failed: ${error.message}`);
+  process.exitCode = 1;
 });

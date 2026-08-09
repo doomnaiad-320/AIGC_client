@@ -1,4 +1,4 @@
--- Loomic Supabase Foundation Hardening
+-- Loomic PostgreSQL Foundation Hardening
 -- Follow-up migration for production safety fixes without rewriting applied history.
 
 create or replace function private.is_workspace_admin_or_owner(p_workspace_id uuid)
@@ -9,19 +9,19 @@ security definer
 set search_path = ''
 as $$
   select
-    (select auth.uid()) is not null
+    (select private.current_user_id()) is not null
     and (
       exists (
         select 1
         from public.workspaces w
         where w.id = p_workspace_id
-          and w.owner_user_id = (select auth.uid())
+          and w.owner_user_id = (select private.current_user_id())
       )
       or exists (
         select 1
         from public.workspace_members wm
         where wm.workspace_id = p_workspace_id
-          and wm.user_id = (select auth.uid())
+          and wm.user_id = (select private.current_user_id())
           and wm.role in ('owner', 'admin')
       )
     );
@@ -35,7 +35,7 @@ security definer
 set search_path = ''
 as $$
   select
-    (select auth.uid()) is not null
+    (select private.current_user_id()) is not null
     and exists (
       select 1
       from public.projects p
@@ -52,7 +52,7 @@ as $$
 begin
   if new.email is distinct from old.email
      and current_user = 'authenticated' then
-    raise exception 'profiles.email is managed by auth.users'
+    raise exception 'profiles.email is managed by public.app_users'
       using errcode = '42501';
   end if;
 
@@ -150,7 +150,7 @@ begin
   perform private.bootstrap_user_foundation(
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data, '{}'::jsonb)
+    coalesce(new.user_metadata, '{}'::jsonb)
   );
 
   return new;
@@ -171,7 +171,7 @@ for insert
 to authenticated
 with check (
   (select private.is_workspace_admin_or_owner(workspace_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
 );
 
 drop policy if exists "projects_update_member" on public.projects;
@@ -199,7 +199,7 @@ for insert
 to authenticated
 with check (
   (select private.is_project_admin_or_owner(project_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
 );
 
 drop policy if exists "canvases_update_member" on public.canvases;
@@ -227,7 +227,7 @@ for insert
 to authenticated
 with check (
   (select private.is_workspace_admin_or_owner(workspace_id))
-  and (created_by is null or created_by = (select auth.uid()))
+  and (created_by is null or created_by = (select private.current_user_id()))
   and (select private.asset_object_project_matches_workspace(project_id, workspace_id))
 );
 
@@ -251,59 +251,6 @@ for delete
 to authenticated
 using ((select private.is_workspace_admin_or_owner(workspace_id)));
 
-drop policy if exists "project_assets_insert_member" on storage.objects;
-drop policy if exists "project_assets_insert_admin" on storage.objects;
-create policy "project_assets_insert_admin"
-on storage.objects
-for insert
-to authenticated
-with check (
-  bucket_id = 'project-assets'
-  and (
-    select private.is_workspace_admin_or_owner(
-      private.try_parse_uuid((storage.foldername(name))[1])
-    )
-  )
-);
-
-drop policy if exists "project_assets_update_member" on storage.objects;
-drop policy if exists "project_assets_update_admin" on storage.objects;
-create policy "project_assets_update_admin"
-on storage.objects
-for update
-to authenticated
-using (
-  bucket_id = 'project-assets'
-  and (
-    select private.is_workspace_admin_or_owner(
-      private.try_parse_uuid((storage.foldername(name))[1])
-    )
-  )
-)
-with check (
-  bucket_id = 'project-assets'
-  and (
-    select private.is_workspace_admin_or_owner(
-      private.try_parse_uuid((storage.foldername(name))[1])
-    )
-  )
-);
-
-drop policy if exists "project_assets_delete_member" on storage.objects;
-drop policy if exists "project_assets_delete_admin" on storage.objects;
-create policy "project_assets_delete_admin"
-on storage.objects
-for delete
-to authenticated
-using (
-  bucket_id = 'project-assets'
-  and (
-    select private.is_workspace_admin_or_owner(
-      private.try_parse_uuid((storage.foldername(name))[1])
-    )
-  )
-);
-
 revoke all on function private.is_workspace_admin_or_owner(uuid) from public, anon, authenticated;
 revoke all on function private.is_project_admin_or_owner(uuid) from public, anon, authenticated;
 revoke all on function private.prevent_profile_email_change() from public, anon, authenticated;
@@ -312,19 +259,3 @@ revoke all on function public.handle_new_user() from public, anon, authenticated
 
 grant execute on function private.is_workspace_admin_or_owner(uuid) to authenticated;
 grant execute on function private.is_project_admin_or_owner(uuid) to authenticated;
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values
-  ('project-assets', 'project-assets', true, 52428800, null),
-  (
-    'user-avatars',
-    'user-avatars',
-    false,
-    5242880,
-    array['image/png', 'image/jpeg', 'image/webp', 'image/gif']::text[]
-  )
-on conflict (id) do update
-set name = excluded.name,
-    public = excluded.public,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;

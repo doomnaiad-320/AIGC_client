@@ -44,7 +44,7 @@ export async function loadWorkspaceSkills(
 
   // Step 2: Query enabled workspace skills with full skill data
   // NOTE: workspace_skills / skills tables may not yet be in the generated
-  // Supabase types — use `as any` to bypass PostgREST type checking.
+  // Generated database types lag this table, so keep the local cast isolated.
   const { data: rows, error } = await (userClient as any)
     .from("workspace_skills")
     .select(

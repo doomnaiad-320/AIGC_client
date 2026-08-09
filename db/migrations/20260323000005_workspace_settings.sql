@@ -27,7 +27,7 @@ CREATE POLICY workspace_settings_select ON public.workspace_settings
     EXISTS (
       SELECT 1 FROM public.workspace_members wm
       WHERE wm.workspace_id = workspace_settings.workspace_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -37,7 +37,7 @@ CREATE POLICY workspace_settings_insert ON public.workspace_settings
     EXISTS (
       SELECT 1 FROM public.workspace_members wm
       WHERE wm.workspace_id = workspace_settings.workspace_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
         AND wm.role IN ('owner', 'admin')
     )
   );
@@ -48,7 +48,7 @@ CREATE POLICY workspace_settings_update ON public.workspace_settings
     EXISTS (
       SELECT 1 FROM public.workspace_members wm
       WHERE wm.workspace_id = workspace_settings.workspace_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
         AND wm.role IN ('owner', 'admin')
     )
   );

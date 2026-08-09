@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
   <img src="https://img.shields.io/badge/Fastify-5-000000?logo=fastify" alt="Fastify" />
   <img src="https://img.shields.io/badge/LangGraph-1.2-1C3C3C?logo=langchain&logoColor=white" alt="LangGraph" />
-  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/Excalidraw-Canvas-6965DB?logo=excalidraw&logoColor=white" alt="Excalidraw" />
   <img src="https://img.shields.io/badge/Turborepo-Monorepo-EF4444?logo=turborepo&logoColor=white" alt="Turborepo" />
   <img src="https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white" alt="pnpm" />
@@ -106,9 +106,9 @@ Loomic 做的是同一件事，但完全开源。你在无限画布上跟 AI 对
                                           └────────┬────────┘
                                                    │
                                           ┌────────▼────────┐
-                                          │    Supabase      │
-                                          │  PostgreSQL      │
-                                          │  Auth / Storage  │
+                                          │   PostgreSQL     │
+                                          │ Data / Auth /    │
+                                          │ Queue Metadata   │
                                           └─────────────────┘
 ```
 
@@ -117,7 +117,8 @@ Loomic 做的是同一件事，但完全开源。你在无限画布上跟 AI 对
 | **Frontend** | Next.js 15 + React 19 + Tailwind CSS 4 | Canvas UI, chat panel, workspace |
 | **API Server** | Fastify 5 + LangGraph | Agent runtime, WebSocket, REST API |
 | **Worker** | Node.js poll-based consumer | Async image/video generation jobs |
-| **Database** | Supabase (PostgreSQL) | Data, auth, storage, job queue (PGMQ) |
+| **Database** | PostgreSQL | Data, local account auth, asset metadata, job queue (PGMQ) |
+| **Storage** | Local filesystem adapter | Generated assets and uploads served by the API |
 | **Canvas** | Excalidraw 0.18 | Infinite canvas rendering |
 | **AI** | LangChain + LangGraph | Agent orchestration, tool calling |
 | **Queue** | PGMQ | Reliable async job processing |
@@ -136,9 +137,9 @@ Loomic 做的是同一件事，但完全开源。你在无限画布上跟 AI 对
 | LLM Providers | OpenAI, Google Gemini, Google Vertex AI |
 | Image Generation | Imagen, DALL-E, Replicate (13+ models) |
 | Video Generation | Google Veo 3.x, Replicate (Kling, Sora, Seedance, etc.) |
-| Database | PostgreSQL (Supabase) |
-| Auth | Supabase Auth (Magic Link + OAuth) |
-| Storage | Supabase Storage (S3-compatible) |
+| Database | PostgreSQL |
+| Auth | Application password auth + signed JWT sessions |
+| Storage | Local filesystem adapter |
 | Queue | PGMQ (PostgreSQL native) |
 | Payments | LemonSqueezy |
 | Linting | Biome |
@@ -152,8 +153,7 @@ Loomic 做的是同一件事，但完全开源。你在无限画布上跟 AI 对
 
 - **Node.js** >= 20
 - **pnpm** >= 10 (`npm install -g pnpm`)
-- **Supabase CLI** (`brew install supabase/tap/supabase`)
-- A [Supabase](https://supabase.com) project (free tier works)
+- **PostgreSQL** >= 15 with permission to create extensions and roles during initial migration
 - At least one AI API key (Google or OpenAI)
 
 ### 1. Clone & Install
@@ -164,16 +164,18 @@ cd Loomic
 pnpm install
 ```
 
-### 2. Set Up Supabase
+### 2. Set Up PostgreSQL
 
-Create a Supabase project at [supabase.com](https://supabase.com), then apply migrations:
+Create an empty PostgreSQL database and configure its connection string:
 
 ```bash
-supabase link --project-ref YOUR_PROJECT_REF
-supabase db push
+createdb loomic
+cp .env.example .env.local
+# Edit DATABASE_URL in .env.local, then run:
+pnpm db:migrate
 ```
 
-This creates all required tables, RLS policies, storage buckets, and the PGMQ job queue.
+This creates the application tables, local auth tables, RLS policies, credit system, and job queue metadata.
 
 ### 3. Configure Environment
 
@@ -184,15 +186,11 @@ cp .env.example .env.local
 Edit `.env.local` with your credentials:
 
 ```bash
-# ── Required: Supabase ──────────────────────────────────────
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# ── Required: PostgreSQL and auth ───────────────────────────
 DATABASE_URL=postgresql://postgres:pw@localhost:5432/loomic
-SUPABASE_DB_URL=postgresql://postgres:pw@db.your-project.supabase.co:5432/postgres # legacy fallback
-SUPABASE_PROJECT_ID=your-project-ref
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+APP_JWT_SECRET=replace-with-a-long-random-secret
+LOOMIC_STORAGE_ROOT=.loomic-storage
+NEXT_PUBLIC_SERVER_BASE_URL=http://localhost:3001
 
 # ── Required: At least one AI provider ──────────────────────
 LOOMIC_AGENT_MODEL=google:gemini-2.5-flash     # or openai:gpt-4o
@@ -217,7 +215,7 @@ GOOGLE_API_KEY=your-google-api-key             # for Gemini + Imagen + Veo
 pnpm seed
 ```
 
-脚本会在**你自己的 Supabase** 中创建 4 个测试账号：
+脚本会在你的本地 PostgreSQL 数据库中创建或更新 4 个测试账号：
 
 | Email | Password | Plan | Credits |
 |-------|----------|------|---------|
@@ -226,7 +224,7 @@ pnpm seed
 | `pro@test.loomic.com` | `opensourceloomic` | Pro | 5,000 |
 | `ultra@test.loomic.com` | `opensourceloomic` | Ultra | 15,000 |
 
-> These accounts are created in YOUR Supabase instance.
+> The seed is idempotent: rerunning it resets these test accounts to the listed plans and credit balances.
 
 ### 5. Start Development
 
@@ -244,6 +242,19 @@ This starts all services simultaneously:
 
 Open http://localhost:3000 and start creating!
 
+### 6. Verify the Local PostgreSQL Flow
+
+With the API server running on port `3001`, run:
+
+```bash
+pnpm test:postgres-smoke
+```
+
+This verifies registration, JWT authentication, viewer bootstrap, project
+creation/listing, canvas save/reload, timestamp handling, and local asset
+storage through the real HTTP API. Set `LOOMIC_SMOKE_BASE_URL` if the API uses
+a different address.
+
 ---
 
 ## ☁️ Deployment
@@ -254,7 +265,7 @@ Open http://localhost:3000 and start creating!
 # Connect your repo to Vercel, then set:
 # Build Command:   pnpm --filter @loomic/shared build && pnpm --filter @loomic/web build
 # Output Directory: apps/web/out
-# Environment Variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_SERVER_BASE_URL
+# Environment Variables: NEXT_PUBLIC_SERVER_BASE_URL
 ```
 
 ### Backend → Railway
@@ -273,23 +284,22 @@ SERVICE_MODE=worker
 WORKER_ID=railway-w1
 ```
 
-Both services share the same environment variables (PostgreSQL, Supabase auth/storage, AI keys, etc.).
+Both services share the same PostgreSQL, local asset storage, auth, and AI provider variables.
 
 The `Dockerfile` at `apps/server/Dockerfile` handles the multi-stage build.
 
-### Database → PostgreSQL / Supabase
+### Database → PostgreSQL
 
-Loomic now reads `DATABASE_URL` first for server-side Postgres features such as
-PGMQ and LangGraph persistence. `SUPABASE_DB_URL` is still supported as a legacy
-fallback while Supabase Auth and Storage are being phased out.
+The API server, workers, authentication, credits, and persistence use `DATABASE_URL`.
+Apply schema changes with the repository migration runner:
 
 ```bash
-# Supabase-backed project: apply all migrations
-supabase db push
-
-# Generate TypeScript types (after schema changes)
-supabase gen types typescript --linked > packages/shared/src/supabase-types.ts
+pnpm db:migrate
 ```
+
+Uploads and generated assets are stored under `LOOMIC_STORAGE_ROOT`. For a
+multi-instance production deployment, replace the local storage adapter with a
+shared object-storage implementation before horizontally scaling the API.
 
 ---
 
@@ -355,8 +365,11 @@ Loomic/
 │   ├── canvas-design/          #   Canvas design guidance
 │   └── json-image-prompt/      #   Image prompt templates
 │
-├── supabase/
-│   └── migrations/             # Database migrations (18 files)
+├── db/
+│   └── migrations/             # PostgreSQL migrations
+├── scripts/
+│   ├── apply-postgres-migrations.mjs
+│   └── seed-test-accounts.mjs
 │
 ├── .env.example                # Environment template
 ├── turbo.json                  # Turborepo config
@@ -372,15 +385,12 @@ Loomic/
 
 | Variable | Description |
 |----------|-------------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-only) |
-| `DATABASE_URL` | Preferred PostgreSQL connection string for server-side persistence and PGMQ |
+| `DATABASE_URL` | PostgreSQL connection string for API, workers, auth, and migrations |
 | `POSTGRES_POOL_MAX` | Optional PostgreSQL pool size; defaults to 10 |
-| `SUPABASE_DB_URL` | Legacy PostgreSQL fallback while Supabase services remain enabled |
-| `SUPABASE_PROJECT_ID` | Supabase project reference ID |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL (exposed to frontend) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (exposed to frontend) |
+| `APP_JWT_SECRET` | Secret used to sign local application sessions; required in production |
+| `LOOMIC_STORAGE_ROOT` | Filesystem path for uploads and generated assets |
+| `LOOMIC_SERVER_PUBLIC_URL` | Public API base URL used to build asset URLs |
+| `NEXT_PUBLIC_SERVER_BASE_URL` | Browser-visible API base URL |
 
 ### AI Providers (at least one required)
 

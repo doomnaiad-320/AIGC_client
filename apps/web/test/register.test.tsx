@@ -5,36 +5,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockFetchViewer,
-  mockGetSession,
-  mockOnAuthStateChange,
+  mockRegisterWithPassword,
   mockReplace,
-  mockSignUp,
 } = vi.hoisted(() => ({
   mockFetchViewer: vi.fn().mockResolvedValue({
     workspace: { id: "w1" },
     profile: { id: "u1" },
     membership: { workspaceId: "w1", userId: "u1", role: "owner" },
   }),
-  mockGetSession: vi.fn(),
-  mockOnAuthStateChange: vi.fn(),
-  mockReplace: vi.fn(),
-  mockSignUp: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
-}));
-
-vi.mock("../src/lib/server-api", () => ({
-  fetchViewer: mockFetchViewer,
-}));
-
-vi.mock("../src/lib/supabase-browser", () => ({
-  getSupabaseBrowserClient: vi.fn(() => ({
-    auth: {
-      signUp: mockSignUp,
-      onAuthStateChange: mockOnAuthStateChange,
-      getSession: mockGetSession,
-      signOut: vi.fn(),
+  mockRegisterWithPassword: vi.fn().mockResolvedValue({
+    session: {
+      access_token: "fresh-token",
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      token_type: "bearer",
+      user: { id: "u1", email: "new-user@example.com", user_metadata: {} },
     },
-  })),
+  }),
+  mockReplace: vi.fn(),
 }));
+
+vi.mock("../src/lib/server-api", () => {
+  class ApiAuthError extends Error {}
+  class ApiApplicationError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
+
+  return {
+    ApiApplicationError,
+    ApiAuthError,
+    fetchViewer: mockFetchViewer,
+    registerWithPassword: mockRegisterWithPassword,
+  };
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn(), replace: mockReplace })),
@@ -46,17 +52,15 @@ import { AuthProvider } from "../src/lib/auth-context";
 describe("Register page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockOnAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    });
+    window.localStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
   });
 
-  it("creates an account and shows the confirmation state", async () => {
+  it("creates an account with the local auth API and opens the workspace", async () => {
     render(
       <AuthProvider>
         <RegisterPage />
@@ -75,50 +79,34 @@ describe("Register page", () => {
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
-      expect(mockSignUp).toHaveBeenCalledWith({
+      expect(mockRegisterWithPassword).toHaveBeenCalledWith({
         email: "new-user@example.com",
         password: "password-123",
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
       });
-    });
-
-    expect((await screen.findByText(/check your email/i)).textContent).toContain("Check your email");
-    expect(screen.getByRole("link", { name: /sign in/i }).getAttribute("href")).toBe("/login");
-  });
-
-  it("bootstraps the viewer when sign-up returns an active session", async () => {
-    mockSignUp.mockResolvedValueOnce({
-      data: {
-        session: {
-          access_token: "fresh-token",
-          user: { id: "u1", email: "new-user@example.com" },
-        },
-      },
-      error: null,
-    });
-
-    render(
-      <AuthProvider>
-        <RegisterPage />
-      </AuthProvider>,
-    );
-
-    fireEvent.change(await screen.findByLabelText(/^email$/i), {
-      target: { value: "new-user@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText(/^password$/i), {
-      target: { value: "password-123" },
-    });
-    fireEvent.change(screen.getByLabelText(/confirm password/i), {
-      target: { value: "password-123" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
-
-    await waitFor(() => {
       expect(mockFetchViewer).toHaveBeenCalledWith("fresh-token");
       expect(mockReplace).toHaveBeenCalledWith("/home");
     });
+  });
+
+  it("shows a validation error when passwords do not match", async () => {
+    render(
+      <AuthProvider>
+        <RegisterPage />
+      </AuthProvider>,
+    );
+
+    fireEvent.change(await screen.findByLabelText(/^email$/i), {
+      target: { value: "new-user@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: "password-123" },
+    });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), {
+      target: { value: "different-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Passwords do not match");
+    expect(mockRegisterWithPassword).not.toHaveBeenCalled();
   });
 });

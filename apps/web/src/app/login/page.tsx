@@ -9,6 +9,7 @@ import { LoadingScreen } from "../../components/loading-screen";
 import { useAuth } from "../../lib/auth-context";
 
 const CALLBACK_ERROR_MESSAGES: Record<string, string> = {
+  auth_callback_disabled: "External sign-in callbacks are no longer enabled. Please sign in with email and password.",
   auth_callback_missing_code: "The sign-in link is incomplete. Request a new one and try again.",
   auth_exchange_failed: "This sign-in link could not be verified. Request a new one and try again.",
   viewer_bootstrap_failed: "Your account was verified, but we could not open your workspace. Please try again.",
@@ -38,7 +39,7 @@ function LoginPageContent() {
       title="Welcome back"
       description="Sign in to continue where your workspace left off."
       features={[
-        "Use password, magic link, or Google sign-in",
+        "Use your Loomic email and password",
         "Keep your canvas and workspace state in one place",
         "Move from idea to delivery without switching tools",
       ]}

@@ -98,15 +98,16 @@ export function createCreditService(options: {
             .select("plan")
             .eq("workspace_id", workspaceId)
             .maybeSingle(),
-          admin
-            .from("daily_credit_claims")
-            .select("id")
-            .eq("workspace_id", workspaceId)
-            .eq("claim_date", new Date().toISOString().slice(0, 10))
-            .maybeSingle(),
+          admin.rpc<boolean>("has_daily_credit_claim", {
+            p_workspace_id: workspaceId,
+          }),
         ]);
 
-      if (balanceResult.error || subscriptionResult.error) {
+      if (
+        balanceResult.error ||
+        subscriptionResult.error ||
+        dailyClaimResult.error
+      ) {
         throw new CreditServiceError(
           "credit_query_failed",
           "Failed to query credit balance.",
@@ -117,7 +118,7 @@ export function createCreditService(options: {
       return {
         balance: balanceResult.data?.balance ?? 0,
         plan: (subscriptionResult.data?.plan as SubscriptionPlan) ?? "free",
-        dailyClaimed: dailyClaimResult.data !== null,
+        dailyClaimed: dailyClaimResult.data === true,
       };
     },
 
@@ -290,8 +291,7 @@ export function createCreditService(options: {
 
       // Atomic plan update + credit grant via RPC to avoid read-then-write race condition.
       // The RPC uses FOR UPDATE row locking so concurrent deductions cannot be overwritten.
-      // TODO: Remove `as any` after running `supabase gen types` to regenerate database.ts
-      const { error } = await (admin.rpc as any)("grant_plan_credits", {
+      const { error } = await admin.rpc("grant_plan_credits", {
         p_workspace_id: workspaceId,
         p_plan: plan,
         p_credits: config.monthlyCredits,

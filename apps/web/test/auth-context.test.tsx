@@ -1,25 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockOnAuthStateChange, mockGetSession, mockSignOut } = vi.hoisted(() => ({
-  mockOnAuthStateChange: vi.fn(),
-  mockGetSession: vi.fn(),
-  mockSignOut: vi.fn(),
-}));
-
-vi.mock("../src/lib/supabase-browser", () => ({
-  getSupabaseBrowserClient: vi.fn(() => ({
-    auth: {
-      onAuthStateChange: mockOnAuthStateChange,
-      getSession: mockGetSession,
-      signOut: mockSignOut,
-    },
-  })),
-}));
-
-import { AuthProvider, useAuth } from "../src/lib/auth-context";
+import { AuthProvider, saveAuthSession, useAuth } from "../src/lib/auth-context";
 
 function TestConsumer() {
   const { user, loading } = useAuth();
@@ -32,19 +16,14 @@ function TestConsumer() {
 }
 
 describe("AuthProvider", () => {
-  afterEach(() => {
-    cleanup();
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetSession.mockResolvedValue({
-      data: { session: null },
-      error: null,
-    });
-    mockOnAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    });
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
   });
 
   it("starts in loading state then resolves to no user", async () => {
@@ -60,14 +39,16 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("user").textContent).toBe("none");
   });
 
-  it("exposes user when session exists", async () => {
-    const mockSession = {
+  it("exposes user when a stored app session exists", async () => {
+    saveAuthSession({
       access_token: "token_123",
-      user: { id: "user_1", email: "test@test.com" },
-    };
-    mockGetSession.mockResolvedValue({
-      data: { session: mockSession },
-      error: null,
+      expires_at: Math.floor(Date.now() / 1000) + 60,
+      token_type: "bearer",
+      user: {
+        email: "test@test.com",
+        id: "user_1",
+        user_metadata: {},
+      },
     });
 
     render(

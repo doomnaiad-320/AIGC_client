@@ -1,6 +1,5 @@
 "use client";
 
-import type { Session, User } from "@supabase/supabase-js";
 import {
   createContext,
   useContext,
@@ -9,45 +8,59 @@ import {
   type ReactNode,
 } from "react";
 
-import { getSupabaseBrowserClient } from "./supabase-browser";
+import type { AppAuthSession } from "./server-api";
+
+const STORAGE_KEY = "loomic.auth.session";
+const AUTH_CHANGED_EVENT = "loomic-auth-changed";
+
+export type AppAuthUser = AppAuthSession["user"];
 
 interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
+  user: AppAuthUser | null;
+  session: AppAuthSession | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+export function saveAuthSession(session: AppAuthSession) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+}
+
+export function clearAuthSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<AppAuthSession | null>(null);
+  const [user, setUser] = useState<AppAuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+    function refreshFromStorage() {
+      const storedSession = readStoredSession();
+      setSession(storedSession);
+      setUser(storedSession?.user ?? null);
       setLoading(false);
-    });
+    }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      setLoading(false);
-    });
+    refreshFromStorage();
+    window.addEventListener(AUTH_CHANGED_EVENT, refreshFromStorage);
+    window.addEventListener("storage", refreshFromStorage);
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, refreshFromStorage);
+      window.removeEventListener("storage", refreshFromStorage);
+    };
   }, []);
 
   async function signOut() {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    clearAuthSession();
     setSession(null);
     setUser(null);
   }
@@ -65,4 +78,22 @@ export function useAuth(): AuthContextValue {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
+}
+
+function readStoredSession(): AppAuthSession | null {
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as AppAuthSession;
+    if (!parsed.access_token || !parsed.user?.id) return null;
+    if (parsed.expires_at * 1000 <= Date.now()) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
 }

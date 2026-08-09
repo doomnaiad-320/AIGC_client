@@ -48,6 +48,44 @@ export class ApiApplicationError extends Error {
   }
 }
 
+export type AppAuthSession = {
+  access_token: string;
+  expires_at: number;
+  token_type: "bearer";
+  user: {
+    email: string;
+    id: string;
+    user_metadata: Record<string, unknown>;
+  };
+};
+
+export async function loginWithPassword(data: {
+  email: string;
+  password: string;
+}): Promise<{ session: AppAuthSession }> {
+  const response = await fetch(`${getServerBaseUrl()}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) return handleErrorResponse(response);
+  return (await response.json()) as { session: AppAuthSession };
+}
+
+export async function registerWithPassword(data: {
+  displayName?: string;
+  email: string;
+  password: string;
+}): Promise<{ session: AppAuthSession }> {
+  const response = await fetch(`${getServerBaseUrl()}/api/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) return handleErrorResponse(response);
+  return (await response.json()) as { session: AppAuthSession };
+}
+
 // --- Existing ---
 
 export async function createRun(

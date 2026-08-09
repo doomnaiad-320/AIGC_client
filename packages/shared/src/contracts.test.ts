@@ -15,7 +15,7 @@ import {
 import * as sharedExports from "./index.js";
 
 const databaseTypeSource = readFileSync(
-  new URL("./supabase/database.ts", import.meta.url),
+  new URL("./postgres/database.ts", import.meta.url),
   "utf8",
 );
 
@@ -504,7 +504,7 @@ describe("@loomic/shared contracts", () => {
     });
   });
 
-  it("tracks server-owned thread_id in shared Supabase typings", () => {
+  it("tracks server-owned thread_id in shared PostgreSQL typings", () => {
     expect(databaseTypeSource).toMatch(/thread_id:\s*string \| null/);
   });
 

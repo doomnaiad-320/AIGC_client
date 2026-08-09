@@ -43,7 +43,7 @@ CREATE POLICY "Users can read own workspace subscription"
   USING (
     workspace_id IN (
       SELECT wm.workspace_id FROM public.workspace_members wm
-      WHERE wm.user_id = auth.uid()
+      WHERE wm.user_id = private.current_user_id()
     )
   );
 
@@ -63,7 +63,7 @@ CREATE POLICY "Users can read own workspace balance"
   USING (
     workspace_id IN (
       SELECT wm.workspace_id FROM public.workspace_members wm
-      WHERE wm.user_id = auth.uid()
+      WHERE wm.user_id = private.current_user_id()
     )
   );
 
@@ -71,7 +71,7 @@ CREATE POLICY "Users can read own workspace balance"
 CREATE TABLE public.credit_transactions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES auth.users(id),
+  user_id uuid REFERENCES public.app_users(id),
   transaction_type public.credit_transaction_type NOT NULL,
   amount integer NOT NULL,
   balance_after integer NOT NULL,
@@ -92,7 +92,7 @@ CREATE POLICY "Users can read own workspace transactions"
   USING (
     workspace_id IN (
       SELECT wm.workspace_id FROM public.workspace_members wm
-      WHERE wm.user_id = auth.uid()
+      WHERE wm.user_id = private.current_user_id()
     )
   );
 
@@ -112,7 +112,7 @@ CREATE POLICY "Users can read own daily claims"
   USING (
     workspace_id IN (
       SELECT wm.workspace_id FROM public.workspace_members wm
-      WHERE wm.user_id = auth.uid()
+      WHERE wm.user_id = private.current_user_id()
     )
   );
 

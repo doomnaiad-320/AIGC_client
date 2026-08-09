@@ -293,7 +293,7 @@ export function createJobService(options: {
 
     async incrementAttempt(jobId) {
       const admin = options.getAdminClient();
-      // NOTE: increment_job_attempt may not be in generated Supabase types yet
+      // NOTE: increment_job_attempt may not be in generated PostgreSQL types yet.
       const { data, error } = await (admin as any).rpc("increment_job_attempt", {
         p_job_id: jobId,
       });

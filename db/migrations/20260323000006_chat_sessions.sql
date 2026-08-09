@@ -3,7 +3,7 @@ CREATE TABLE public.chat_sessions (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   canvas_id   uuid NOT NULL REFERENCES public.canvases(id) ON DELETE CASCADE,
   title       text NOT NULL DEFAULT 'New Chat',
-  created_by  uuid REFERENCES auth.users(id),
+  created_by  uuid REFERENCES public.app_users(id),
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
@@ -41,7 +41,7 @@ CREATE POLICY chat_sessions_select ON public.chat_sessions
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE c.id = chat_sessions.canvas_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -52,7 +52,7 @@ CREATE POLICY chat_sessions_insert ON public.chat_sessions
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE c.id = chat_sessions.canvas_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -63,7 +63,7 @@ CREATE POLICY chat_sessions_delete ON public.chat_sessions
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE c.id = chat_sessions.canvas_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -74,7 +74,7 @@ CREATE POLICY chat_sessions_update ON public.chat_sessions
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE c.id = chat_sessions.canvas_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -89,7 +89,7 @@ CREATE POLICY chat_messages_select ON public.chat_messages
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE cs.id = chat_messages.session_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -101,7 +101,7 @@ CREATE POLICY chat_messages_insert ON public.chat_messages
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE cs.id = chat_messages.session_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );
 
@@ -113,6 +113,6 @@ CREATE POLICY chat_messages_delete ON public.chat_messages
       JOIN public.projects p ON p.id = c.project_id
       JOIN public.workspace_members wm ON wm.workspace_id = p.workspace_id
       WHERE cs.id = chat_messages.session_id
-        AND wm.user_id = auth.uid()
+        AND wm.user_id = private.current_user_id()
     )
   );

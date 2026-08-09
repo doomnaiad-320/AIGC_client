@@ -873,10 +873,10 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             : createDefaultModelSpecifier({ agentModel: run.modelOverride }))
           : options.model;
 
-        // Build persistImage closure using the user's Supabase client.
+        // Build persistImage closure using the user's database/storage client.
         // Client creation is deferred into the closure so it only runs
         // when an image is actually generated (avoids throwing in tests
-        // that don't configure Supabase env vars).
+        // that do not configure persistence dependencies).
         let persistImage: ((url: string, mime: string, prompt: string) => Promise<string>) | undefined;
         if (options.createUserClient && run.accessToken) {
           const createClient = options.createUserClient;
@@ -1183,7 +1183,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
       }
       } catch (streamError) {
         // Catch DB / checkpoint errors that bubble up from the LangGraph stream
-        // (e.g. Supabase circuit-breaker, connection pool exhaustion).
+        // (e.g. database circuit-breaker or connection pool exhaustion).
         // Instead of crashing the process, yield a clean failure event.
         console.error("[agent-runtime] Stream iteration failed:", streamError);
         const failedEvent = toFailedEvent(runId, now, streamError);

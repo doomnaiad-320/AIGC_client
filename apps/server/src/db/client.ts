@@ -489,33 +489,45 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
       };
     case "deduct_credits":
       return {
-        sql: "select public.deduct_credits($1::uuid, $2::int, $3::text, $4::uuid, $5::jsonb) as result",
+        sql: "select public.deduct_credits($1::uuid, $2::uuid, $3::int, $4::uuid, $5::text) as result",
         unwrapColumn: "result",
         values: [
           args.p_workspace_id,
+          args.p_user_id,
           args.p_amount,
-          args.p_reason,
           args.p_job_id ?? null,
-          JSON.stringify(args.p_metadata ?? {}),
+          args.p_description ?? null,
         ],
       };
     case "refund_credits":
       return {
-        sql: "select public.refund_credits($1::uuid, $2::int, $3::text, $4::uuid, $5::jsonb) as result",
+        sql: "select public.refund_credits($1::uuid, $2::uuid, $3::int, $4::uuid, $5::text) as result",
         unwrapColumn: "result",
         values: [
           args.p_workspace_id,
+          args.p_user_id,
           args.p_amount,
-          args.p_reason,
           args.p_job_id ?? null,
-          JSON.stringify(args.p_metadata ?? {}),
+          args.p_description ?? null,
         ],
       };
     case "claim_daily_credits":
       return {
-        sql: "select public.claim_daily_credits($1::uuid) as result",
+        sql: "select public.claim_daily_credits($1::uuid, $2::int) as result",
+        unwrapColumn: "result",
+        values: [args.p_workspace_id, args.p_amount],
+      };
+    case "has_daily_credit_claim":
+      return {
+        sql: "select exists(select 1 from public.daily_credit_claims where workspace_id = $1::uuid and claim_date = current_date) as result",
         unwrapColumn: "result",
         values: [args.p_workspace_id],
+      };
+    case "grant_plan_credits":
+      return {
+        sql: "select public.grant_plan_credits($1::uuid, $2::public.subscription_plan, $3::int) as result",
+        unwrapColumn: "result",
+        values: [args.p_workspace_id, args.p_plan, args.p_credits],
       };
     case "increment_job_attempt":
       return {

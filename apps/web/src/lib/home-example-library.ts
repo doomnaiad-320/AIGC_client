@@ -1,13 +1,29 @@
-import type { Database } from "@loomic/shared";
-
 import type { HomeExampleCategory, InputMention } from "./home-example-seeds";
 import { homeExampleSeedCategories } from "./home-example-seeds";
-import { getSupabaseBrowserClient } from "./supabase-browser";
 
-type HomeExampleCategoryRow =
-  Database["public"]["Tables"]["home_example_categories"]["Row"];
-type HomeExampleExampleRow =
-  Database["public"]["Tables"]["home_example_examples"]["Row"];
+export type HomeExampleCategoryRow = {
+  accent: string | null;
+  created_at?: string;
+  data_type: string;
+  is_active?: boolean;
+  key: string;
+  label: string;
+  sort_order: number;
+  updated_at?: string;
+};
+
+export type HomeExampleExampleRow = {
+  category_key: string;
+  created_at?: string;
+  id?: string;
+  image_urls: string[];
+  input_mentions: unknown;
+  is_active?: boolean;
+  prompt: string;
+  sort_order: number;
+  title: string;
+  updated_at?: string;
+};
 
 export function mapHomeExampleRows(
   categories: HomeExampleCategoryRow[],
@@ -42,32 +58,5 @@ export function mapHomeExampleRows(
 }
 
 export async function loadHomeExampleCategories(): Promise<HomeExampleCategory[]> {
-  const supabase = getSupabaseBrowserClient();
-
-  const [categoriesResult, examplesResult] = await Promise.all([
-    supabase
-      .from("home_example_categories")
-      .select("key, label, data_type, accent, sort_order, is_active, created_at, updated_at")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("home_example_examples")
-      .select("id, category_key, title, prompt, image_urls, input_mentions, sort_order, is_active, created_at, updated_at")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true }),
-  ]);
-
-  if (categoriesResult.error) {
-    throw categoriesResult.error;
-  }
-
-  if (examplesResult.error) {
-    throw examplesResult.error;
-  }
-
-  const categories = categoriesResult.data ?? [];
-  const examples = examplesResult.data ?? [];
-  const mapped = mapHomeExampleRows(categories, examples);
-
-  return mapped.length > 0 ? mapped : homeExampleSeedCategories;
+  return homeExampleSeedCategories;
 }

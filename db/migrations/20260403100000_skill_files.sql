@@ -51,7 +51,7 @@ CREATE POLICY skill_files_select ON public.skill_files
     EXISTS (
       SELECT 1 FROM public.skills s
       WHERE s.id = skill_files.skill_id
-        AND (s.source IN ('system', 'community') OR s.created_by = auth.uid())
+        AND (s.source IN ('system', 'community') OR s.created_by = private.current_user_id())
     )
   );
 
@@ -63,7 +63,7 @@ CREATE POLICY skill_files_insert ON public.skill_files
       SELECT 1 FROM public.skills s
       WHERE s.id = skill_files.skill_id
         AND s.source = 'user'
-        AND s.created_by = auth.uid()
+        AND s.created_by = private.current_user_id()
     )
   );
 
@@ -75,7 +75,7 @@ CREATE POLICY skill_files_update ON public.skill_files
       SELECT 1 FROM public.skills s
       WHERE s.id = skill_files.skill_id
         AND s.source = 'user'
-        AND s.created_by = auth.uid()
+        AND s.created_by = private.current_user_id()
     )
   )
   WITH CHECK (
@@ -83,7 +83,7 @@ CREATE POLICY skill_files_update ON public.skill_files
       SELECT 1 FROM public.skills s
       WHERE s.id = skill_files.skill_id
         AND s.source = 'user'
-        AND s.created_by = auth.uid()
+        AND s.created_by = private.current_user_id()
     )
   );
 
@@ -95,7 +95,7 @@ CREATE POLICY skill_files_delete ON public.skill_files
       SELECT 1 FROM public.skills s
       WHERE s.id = skill_files.skill_id
         AND s.source = 'user'
-        AND s.created_by = auth.uid()
+        AND s.created_by = private.current_user_id()
     )
   );
 

@@ -4,6 +4,20 @@ import type { ServerEnv } from "../config/env.js";
 
 export type PostgresPool = pg.Pool;
 
+export function createPostgresTypeOverrides(): pg.TypeOverrides {
+  const types = new pg.TypeOverrides();
+
+  types.setTypeParser(pg.types.builtins.DATE, (value) => value);
+  types.setTypeParser(pg.types.builtins.TIMESTAMP, (value) =>
+    new Date(`${value.replace(" ", "T")}Z`).toISOString(),
+  );
+  types.setTypeParser(pg.types.builtins.TIMESTAMPTZ, (value) =>
+    new Date(value).toISOString(),
+  );
+
+  return types;
+}
+
 export function getDatabaseUrl(
   env: Pick<ServerEnv, "databaseUrl">,
 ): string | undefined {
@@ -27,6 +41,7 @@ export function createPostgresPool(
     connectionTimeoutMillis: 10_000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10_000,
+    types: createPostgresTypeOverrides(),
   });
 
   pool.on("error", (err) => {

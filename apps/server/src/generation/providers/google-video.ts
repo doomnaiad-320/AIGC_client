@@ -370,7 +370,7 @@ export class GoogleVideoProvider implements VideoProvider {
 
     // The Veo download URI requires authentication. Append the API key so
     // the worker can fetch it with a plain `fetch()` call. This URL is only
-    // used internally — the worker re-uploads to Supabase storage and
+    // used internally; the worker persists it to local asset storage and
     // returns a public signed URL to the user, so the key is never exposed.
     const separator = video.uri.includes("?") ? "&" : "?";
     const authenticatedUrl = `${video.uri}${separator}key=${this.apiKey}`;

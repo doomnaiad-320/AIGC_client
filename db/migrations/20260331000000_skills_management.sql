@@ -21,7 +21,7 @@ CREATE TABLE public.skills (
   skill_content text NOT NULL,  -- Full SKILL.md content
   metadata jsonb DEFAULT '{}'::jsonb,
   is_featured boolean NOT NULL DEFAULT false,
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -42,7 +42,7 @@ CREATE TABLE public.workspace_skills (
   enabled boolean NOT NULL DEFAULT true,
   config jsonb DEFAULT '{}'::jsonb,
   installed_at timestamptz NOT NULL DEFAULT now(),
-  installed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  installed_by uuid REFERENCES public.app_users(id) ON DELETE SET NULL,
 
   UNIQUE (workspace_id, skill_id)
 );
@@ -59,22 +59,22 @@ ALTER TABLE public.workspace_skills ENABLE ROW LEVEL SECURITY;
 -- Skills: anyone authenticated can read system/community skills
 CREATE POLICY skills_select_all ON public.skills
   FOR SELECT TO authenticated
-  USING (source IN ('system', 'community') OR created_by = auth.uid());
+  USING (source IN ('system', 'community') OR created_by = private.current_user_id());
 
 -- Skills: users can create their own custom skills
 CREATE POLICY skills_insert_user ON public.skills
   FOR INSERT TO authenticated
-  WITH CHECK (source = 'user' AND created_by = auth.uid());
+  WITH CHECK (source = 'user' AND created_by = private.current_user_id());
 
 -- Skills: users can update/delete their own skills
 CREATE POLICY skills_update_user ON public.skills
   FOR UPDATE TO authenticated
-  USING (created_by = auth.uid())
-  WITH CHECK (created_by = auth.uid());
+  USING (created_by = private.current_user_id())
+  WITH CHECK (created_by = private.current_user_id());
 
 CREATE POLICY skills_delete_user ON public.skills
   FOR DELETE TO authenticated
-  USING (created_by = auth.uid());
+  USING (created_by = private.current_user_id());
 
 -- Service role full access
 CREATE POLICY skills_service ON public.skills

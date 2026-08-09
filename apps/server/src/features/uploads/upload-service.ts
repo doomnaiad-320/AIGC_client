@@ -5,7 +5,7 @@ import type {
   UserDbClient,
 } from "../../auth/user.js";
 
-/** Buckets configured as public in Supabase — use getPublicUrl instead of signed URLs */
+/** Public local buckets use direct asset URLs instead of signed URLs. */
 const PUBLIC_BUCKETS = new Set(["project-assets"]);
 
 export class UploadServiceError extends Error {

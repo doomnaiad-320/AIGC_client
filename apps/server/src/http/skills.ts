@@ -21,7 +21,7 @@ import type {
 } from "../auth/user.js";
 
 /**
- * Helper to bypass Supabase generated types for tables not yet in the schema
+ * Helper for tables not yet represented in generated PostgreSQL types.
  * (skills, workspace_skills). Returns untyped client so PostgREST queries compile.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

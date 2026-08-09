@@ -7,7 +7,7 @@ CREATE TYPE public.brand_kit_asset_type AS ENUM ('color', 'font', 'logo', 'image
 -- brand_kits: Kit main table
 CREATE TABLE public.brand_kits (
   id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id       UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id       UUID NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
   name          TEXT NOT NULL DEFAULT '未命名',
   is_default    BOOLEAN NOT NULL DEFAULT false,
   guidance_text TEXT,
@@ -57,9 +57,9 @@ ALTER TABLE public.brand_kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.brand_kit_assets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY brand_kits_user_policy ON public.brand_kits
-  FOR ALL USING (auth.uid() = user_id);
+  FOR ALL USING (private.current_user_id() = user_id);
 
 CREATE POLICY brand_kit_assets_policy ON public.brand_kit_assets
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.brand_kits WHERE id = kit_id AND user_id = auth.uid())
+    EXISTS (SELECT 1 FROM public.brand_kits WHERE id = kit_id AND user_id = private.current_user_id())
   );

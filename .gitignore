@@ -14,7 +14,6 @@
 **/.next/
 /out/
 apps/web/out/
-supabase/.temp/
 
 # production
 /build
@@ -47,7 +46,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 logs/
-supabase/supabase/
+.loomic-storage/
 
 tmp/
 temp/.claude/worktrees/

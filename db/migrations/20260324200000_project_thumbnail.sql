@@ -1,5 +1,5 @@
 -- Add thumbnail storage path to projects table.
--- The path references an object in the project-assets Supabase Storage bucket.
+-- The path references an object in the project-assets local asset storage bucket.
 ALTER TABLE public.projects
   ADD COLUMN IF NOT EXISTS thumbnail_path text;
 

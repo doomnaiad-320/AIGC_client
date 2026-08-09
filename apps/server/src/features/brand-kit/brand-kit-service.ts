@@ -313,7 +313,7 @@ export function createBrandKitService(options: {
       }
 
       if (count === 0) {
-        // Supabase returns count=0 when head:true is used; since we don't use
+        // The compatibility query returns count=0 when head:true is used; since we don't use
         // head:true the count may be null. Only treat an explicit 0 as not-found.
         // In practice, the fetchKitDetail below will catch not-found scenarios.
       }

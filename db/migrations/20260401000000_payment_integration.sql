@@ -41,6 +41,6 @@ CREATE POLICY "Users can read own workspace payment events"
   USING (
     workspace_id IN (
       SELECT wm.workspace_id FROM public.workspace_members wm
-      WHERE wm.user_id = auth.uid()
+      WHERE wm.user_id = private.current_user_id()
     )
   );

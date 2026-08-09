@@ -58,7 +58,7 @@ declare
   v_project record;
   v_canvas record;
 begin
-  v_user_id := (select auth.uid());
+  v_user_id := (select private.current_user_id());
 
   if v_user_id is null then
     raise exception 'Not authenticated'

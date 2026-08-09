@@ -5,11 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockFetchViewer,
-  mockGetSession,
-  mockOnAuthStateChange,
-  mockSignInWithOtp,
-  mockSignInWithPassword,
-  mockSignInWithOAuth,
+  mockLoginWithPassword,
   mockReplace,
   mockSearchParams,
 } = vi.hoisted(() => ({
@@ -18,38 +14,35 @@ const {
     profile: { id: "u1" },
     membership: { workspaceId: "w1", userId: "u1", role: "owner" },
   }),
-  mockGetSession: vi.fn(),
-  mockOnAuthStateChange: vi.fn(),
-  mockSignInWithOtp: vi.fn().mockResolvedValue({ error: null }),
-  mockSignInWithPassword: vi.fn().mockResolvedValue({
-    data: {
-      session: {
-        access_token: "session-token",
-        user: { id: "u1", email: "user@example.com" },
-      },
+  mockLoginWithPassword: vi.fn().mockResolvedValue({
+    session: {
+      access_token: "session-token",
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      token_type: "bearer",
+      user: { id: "u1", email: "user@example.com", user_metadata: {} },
     },
-    error: null,
   }),
-  mockSignInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
   mockReplace: vi.fn(),
   mockSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
-vi.mock("../src/lib/server-api", () => ({
-  fetchViewer: mockFetchViewer,
-}));
+vi.mock("../src/lib/server-api", () => {
+  class ApiAuthError extends Error {}
+  class ApiApplicationError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
 
-vi.mock("../src/lib/supabase-browser", () => ({
-  getSupabaseBrowserClient: vi.fn(() => ({
-    auth: {
-      signInWithOtp: mockSignInWithOtp,
-      signInWithPassword: mockSignInWithPassword,
-      signInWithOAuth: mockSignInWithOAuth,
-      onAuthStateChange: mockOnAuthStateChange,
-      getSession: mockGetSession,
-    },
-  })),
-}));
+  return {
+    ApiApplicationError,
+    ApiAuthError,
+    fetchViewer: mockFetchViewer,
+    loginWithPassword: mockLoginWithPassword,
+  };
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn(), replace: mockReplace })),
@@ -62,26 +55,27 @@ import { AuthProvider } from "../src/lib/auth-context";
 describe("Login page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockOnAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    });
+    window.localStorage.clear();
     mockSearchParams.mockReturnValue(new URLSearchParams());
   });
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
   });
 
-  it("renders split screen with brand panel and login form", async () => {
+  it("renders split screen with brand panel and password login form", async () => {
     render(
       <AuthProvider>
         <LoginPage />
       </AuthProvider>,
     );
+
     expect((await screen.findByText("Loomic")).textContent).toBe("Loomic");
-    expect(screen.getByText(/Send login link/i).textContent).toContain("Send login link");
-    expect(screen.getByText(/Continue with Google/i).textContent).toContain("Continue with Google");
+    expect(screen.getByText(/Sign in with email and password/i).textContent).toContain(
+      "Sign in with email and password",
+    );
+    expect(screen.getByRole("button", { name: /^sign in$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /create one/i }).getAttribute("href")).toBe("/register");
   });
 
@@ -99,7 +93,7 @@ describe("Login page", () => {
     );
   });
 
-  it("sends a login-only magic link", async () => {
+  it("bootstraps the viewer before redirecting after password sign-in", async () => {
     render(
       <AuthProvider>
         <LoginPage />
@@ -109,37 +103,13 @@ describe("Login page", () => {
     fireEvent.change(await screen.findByLabelText(/email/i), {
       target: { value: "user@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /send login link/i }));
-
-    await waitFor(() => {
-      expect(mockSignInWithOtp).toHaveBeenCalledWith({
-        email: "user@example.com",
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          shouldCreateUser: false,
-        },
-      });
-    });
-  });
-
-  it("bootstraps the viewer before redirecting after password sign-in", async () => {
-    render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
-    );
-
-    fireEvent.click(await screen.findByRole("button", { name: /use password instead/i }));
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: "user@example.com" },
-    });
     fireEvent.change(screen.getByLabelText(/password/i), {
       target: { value: "password-123" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
     await waitFor(() => {
-      expect(mockSignInWithPassword).toHaveBeenCalledWith({
+      expect(mockLoginWithPassword).toHaveBeenCalledWith({
         email: "user@example.com",
         password: "password-123",
       });

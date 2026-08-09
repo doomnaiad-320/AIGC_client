@@ -7,14 +7,14 @@
 
 /** Regex patterns for detecting image URLs in markdown content */
 const IMAGE_URL_RE = /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i;
-const SUPABASE_STORAGE_RE = /supabase\.\w+\/storage\/v1\//i;
+const LOCAL_ASSET_RE = /^\/assets\//i;
 
 /**
  * Check if a URL points to an image resource.
- * Matches common image extensions and Supabase storage URLs.
+ * Matches common image extensions and local asset URLs.
  */
 export function isImageUrl(url: string): boolean {
-  return IMAGE_URL_RE.test(url) || SUPABASE_STORAGE_RE.test(url);
+  return IMAGE_URL_RE.test(url) || LOCAL_ASSET_RE.test(url);
 }
 
 /** Tool display configuration */
