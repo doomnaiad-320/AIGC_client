@@ -14,16 +14,15 @@ import {
   ArrowLeft,
   BadgeAlert,
   Bot,
-  ChevronRight,
   CircleDollarSign,
   ClipboardList,
   Coins,
   Database,
+  Eye,
   Loader2,
   RefreshCw,
   Search,
   ShieldCheck,
-  Sparkles,
   Users,
   Workflow,
 } from "lucide-react";
@@ -43,6 +42,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   adjustAdminCredits,
   fetchAdminAgentRuns,
   fetchAdminAuditEvents,
@@ -54,15 +62,46 @@ import {
   fetchAdminUsers,
 } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 
 type AdminTab = "users" | "jobs" | "agent-runs" | "ledger" | "audit";
 
-const tabs: Array<{ id: AdminTab; label: string; icon: typeof Users }> = [
-  { id: "users", label: "Users", icon: Users },
-  { id: "jobs", label: "Jobs", icon: Workflow },
-  { id: "agent-runs", label: "Agent runs", icon: Bot },
-  { id: "ledger", label: "Credit ledger", icon: Coins },
-  { id: "audit", label: "Audit log", icon: ClipboardList },
+const tabs: Array<{
+  id: AdminTab;
+  label: string;
+  description: string;
+  icon: typeof Users;
+}> = [
+  {
+    id: "users",
+    label: "Users",
+    description: "Manage accounts, workspace access, plans, and balances.",
+    icon: Users,
+  },
+  {
+    id: "jobs",
+    label: "Generation jobs",
+    description: "Monitor queued work, execution status, and failures.",
+    icon: Workflow,
+  },
+  {
+    id: "agent-runs",
+    label: "Agent runs",
+    description: "Review agent sessions, models, threads, and runtime errors.",
+    icon: Bot,
+  },
+  {
+    id: "ledger",
+    label: "Credit ledger",
+    description: "Review grants, usage, refunds, and manual adjustments.",
+    icon: Coins,
+  },
+  {
+    id: "audit",
+    label: "Audit log",
+    description: "Track sensitive administrator actions and their targets.",
+    icon: ClipboardList,
+  },
 ];
 
 export default function AdminPage() {
@@ -177,6 +216,13 @@ export default function AdminPage() {
     }
   }
 
+  function closeAdjustmentDialog() {
+    setAdjustingUser(null);
+    setAdjustmentAmount("");
+    setAdjustmentReason("");
+    setAdjustmentError(null);
+  }
+
   async function submitAdjustment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const token = tokenRef.current;
@@ -203,9 +249,7 @@ export default function AdminPage() {
         amount,
         reason: adjustmentReason.trim(),
       });
-      setAdjustingUser(null);
-      setAdjustmentAmount("");
-      setAdjustmentReason("");
+      closeAdjustmentDialog();
       await load(search);
       if (selectedUserDetail?.user.id === adjustedUser.id) {
         const { detail } = await fetchAdminUserDetail(token, adjustedUser.id);
@@ -230,23 +274,23 @@ export default function AdminPage() {
     return <AccessDenied />;
   }
 
+  const activeTab = tabs.find((item) => item.id === tab);
+
   return (
-    <div className="min-h-screen bg-[#f4f7f6] text-[#17211e]">
-      <div className="mx-auto flex min-h-screen max-w-[1680px]">
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-[#d9e2dd] bg-[#17211e] px-4 py-5 text-[#dce7e0] lg:flex">
+    <div className="min-h-screen bg-muted/30 text-foreground">
+      <div className="flex min-h-screen">
+        <aside className="hidden w-64 shrink-0 flex-col border-r bg-background px-3 py-4 lg:flex">
           <Link
             href="/admin"
-            className="flex items-center gap-3 px-2 py-2"
+            className="flex h-10 items-center gap-3 px-3"
             aria-label="Admin Console home"
           >
-            <span className="flex size-8 items-center justify-center rounded-md bg-[#d2efdf] text-[#17211e]">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ShieldCheck className="size-4" />
             </span>
-            <span className="text-sm font-semibold text-white">
-              Admin Console
-            </span>
+            <span className="text-sm font-semibold">Loomic Admin</span>
           </Link>
-          <div className="mt-10 space-y-1">
+          <div className="mt-6 space-y-1">
             {tabs.map((item) => {
               const Icon = item.icon;
               const selected = tab === item.id;
@@ -255,11 +299,12 @@ export default function AdminPage() {
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition-colors ${
+                  className={cn(
+                    "flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition-colors",
                     selected
-                      ? "bg-[#294238] text-white"
-                      : "text-[#b5c6bc] hover:bg-[#20362d] hover:text-white"
-                  }`}
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                  )}
                 >
                   <Icon className="size-4" />
                   {item.label}
@@ -267,10 +312,10 @@ export default function AdminPage() {
               );
             })}
           </div>
-          <div className="mt-auto border-t border-[#365247] pt-4">
+          <div className="mt-auto border-t pt-3">
             <Link
               href="/home"
-              className="flex h-9 items-center gap-2 px-3 text-sm text-[#b5c6bc] hover:text-white"
+              className="flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ArrowLeft className="size-4" />
               Return to workspace
@@ -278,18 +323,15 @@ export default function AdminPage() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
-          <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#d9e2dd] pb-5">
+        <main className="mx-auto min-w-0 max-w-[1600px] flex-1 px-4 py-5 sm:px-6 lg:px-8">
+          <header className="flex min-h-14 flex-wrap items-center justify-between gap-4 border-b pb-5">
             <div>
-              <div className="flex items-center gap-2 text-xs font-medium text-[#477462]">
-                <span className="size-1.5 rounded-full bg-[#24916a]" />
-                Platform operations
-              </div>
-              <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">
-                Admin Console
+              <h1 className="text-xl font-semibold">
+                {activeTab?.label ?? "Users"}
               </h1>
-              <p className="mt-1 text-sm text-[#64736c]">
-                Users, credit activity, job health, and operator actions.
+              <p className="mt-1 text-sm text-muted-foreground">
+                {activeTab?.description ??
+                  "Manage accounts, workspace access, plans, and balances."}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -316,7 +358,7 @@ export default function AdminPage() {
           </header>
 
           <nav
-            className="mt-4 flex gap-1 overflow-x-auto border-b border-[#d9e2dd] lg:hidden"
+            className="mt-4 flex gap-1 overflow-x-auto border-b lg:hidden"
             aria-label="Admin sections"
           >
             {tabs.map((item) => {
@@ -326,11 +368,12 @@ export default function AdminPage() {
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm ${
+                  className={cn(
+                    "flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm",
                     tab === item.id
-                      ? "border-[#24916a] text-[#17211e]"
-                      : "border-transparent text-[#64736c]"
-                  }`}
+                      ? "border-foreground font-medium text-foreground"
+                      : "border-transparent text-muted-foreground",
+                  )}
                 >
                   <Icon className="size-4" />
                   {item.label}
@@ -341,7 +384,7 @@ export default function AdminPage() {
 
           {error && (
             <div
-              className="mt-5 flex items-start gap-3 border border-[#e9bebe] bg-[#fff7f6] p-4 text-sm text-[#8e2f2b]"
+              className="mt-5 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
               role="alert"
             >
               <BadgeAlert className="mt-0.5 size-4 shrink-0" />
@@ -350,7 +393,7 @@ export default function AdminPage() {
           )}
 
           <section
-            className="mt-6 grid grid-cols-2 border border-[#d9e2dd] bg-white sm:grid-cols-4"
+            className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4"
             aria-label="Platform overview"
           >
             <Stat
@@ -376,7 +419,7 @@ export default function AdminPage() {
             />
           </section>
 
-          <section className="mt-6 border border-[#d9e2dd] bg-white">
+          <section className="mt-6 overflow-hidden rounded-lg border bg-background">
             {tab === "users" && (
               <UsersTable
                 users={users}
@@ -406,18 +449,30 @@ export default function AdminPage() {
 
       <Dialog
         open={Boolean(adjustingUser)}
-        onOpenChange={(open) => !open && setAdjustingUser(null)}
+        onOpenChange={(open) => !open && closeAdjustmentDialog()}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
           <form onSubmit={submitAdjustment}>
-            <DialogHeader>
+            <DialogHeader className="border-b px-6 py-5 pr-14">
               <DialogTitle>Adjust credits</DialogTitle>
               <DialogDescription>
-                {adjustingUser?.email} · Current balance:{" "}
-                {adjustingUser?.balance.toLocaleString() ?? 0}
+                Create an audited balance adjustment for this user.
               </DialogDescription>
             </DialogHeader>
-            <div className="mt-5 space-y-4">
+            <div className="space-y-5 px-6 py-5">
+              <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">
+                    {adjustingUser?.email}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    Current balance
+                  </div>
+                </div>
+                <div className="font-medium tabular-nums">
+                  {adjustingUser?.balance.toLocaleString() ?? 0}
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="admin-credit-amount">Credit adjustment</Label>
                 <Input
@@ -447,17 +502,28 @@ export default function AdminPage() {
                 />
               </div>
               {adjustmentError && (
-                <p className="text-sm text-destructive" role="alert">
+                <p
+                  className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
                   {adjustmentError}
                 </p>
               )}
             </div>
-            <DialogFooter className="mt-6">
+            <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeAdjustmentDialog}
+                disabled={savingAdjustment}
+              >
+                Cancel
+              </Button>
               <Button type="submit" disabled={savingAdjustment}>
                 {savingAdjustment && (
                   <Loader2 data-icon="inline-start" className="animate-spin" />
                 )}
-                Save adjustment
+                Apply adjustment
               </Button>
             </DialogFooter>
           </form>
@@ -493,14 +559,17 @@ function Stat({
   alert?: boolean;
 }) {
   return (
-    <div className="min-w-0 border-b border-[#d9e2dd] p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
-      <div className="flex items-center gap-2 text-xs text-[#64736c]">
+    <div className="min-w-0 rounded-lg border bg-background p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Icon
-          className={`size-3.5 ${alert ? "text-[#c65349]" : "text-[#477462]"}`}
+          className={cn(
+            "size-3.5",
+            alert ? "text-destructive" : "text-muted-foreground",
+          )}
         />
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-3 text-2xl font-semibold tabular-nums">
+      <div className="mt-2 text-2xl font-semibold tabular-nums">
         {value?.toLocaleString() ?? "—"}
       </div>
     </div>
@@ -514,10 +583,10 @@ function TableFrame({
 }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#d9e2dd] px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">{title}</h2>
-          <p className="mt-1 text-sm text-[#64736c]">{subtitle}</p>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>
       {children}
@@ -542,15 +611,15 @@ function UsersTable({
 }) {
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#d9e2dd] px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">Users</h2>
-          <p className="mt-1 text-sm text-[#64736c]">
+          <h2 className="text-sm font-semibold">All users</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Account, subscription, balance, and platform access.
           </p>
         </div>
         <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#75847c]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search users"
             className="pl-9"
@@ -562,7 +631,7 @@ function UsersTable({
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[840px] text-left text-sm">
-          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">User</th>
               <th className="px-5 py-3 font-medium">Workspace</th>
@@ -572,17 +641,17 @@ function UsersTable({
               <th className="px-5 py-3 text-right font-medium">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e4ebe7]">
+          <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={6} />
             ) : users.length === 0 ? (
               <EmptyRow columns={6} label="No users match this search." />
             ) : (
               users.map((user) => (
-                <tr key={user.id} className="hover:bg-[#f7faf8]">
-                  <td className="px-5 py-3.5">
+                <tr key={user.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#dceee5] text-xs font-semibold text-[#285b47]">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                         {initials(user.displayName, user.email)}
                       </span>
                       <div className="min-w-0">
@@ -590,53 +659,55 @@ function UsersTable({
                           <span className="truncate">{user.displayName}</span>
                           {user.isPlatformAdmin && (
                             <ShieldCheck
-                              className="size-3.5 text-[#24855f]"
+                              className="size-3.5 text-foreground"
                               aria-label="Platform admin"
                             />
                           )}
                         </div>
-                        <div className="max-w-52 truncate text-xs text-[#64736c]">
+                        <div className="max-w-52 truncate text-xs text-muted-foreground">
                           {user.email}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {user.workspaceName ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     <PlanBadge plan={user.plan} />
                   </td>
-                  <td className="px-5 py-3.5 font-medium tabular-nums">
+                  <td className="px-5 py-3 font-medium tabular-nums">
                     {user.balance.toLocaleString()}
                   </td>
-                  <td className="px-5 py-3.5 text-[#64736c]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {user.lastSignInAt
                       ? formatDate(user.lastSignInAt)
                       : "Never"}
                   </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex justify-end gap-2">
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex justify-end gap-1">
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon-sm"
+                        variant="ghost"
                         onClick={() => onView(user)}
+                        aria-label="View user details"
+                        title="View details"
                       >
-                        Details
-                        <ChevronRight data-icon="inline-end" />
+                        <Eye />
                       </Button>
                       {user.workspaceId ? (
                         <Button
-                          size="sm"
-                          variant="outline"
+                          size="icon-sm"
+                          variant="ghost"
                           onClick={() => onAdjust(user)}
+                          aria-label="Adjust user credits"
+                          title="Adjust credits"
                         >
-                          <Coins data-icon="inline-start" />
-                          Adjust
+                          <Coins />
                         </Button>
                       ) : (
-                        <span className="text-xs text-[#8a9890]">
-                          No workspace
+                        <span className="px-2 text-xs text-muted-foreground">
+                          —
                         </span>
                       )}
                     </div>
@@ -659,7 +730,7 @@ function JobsTable({ jobs, loading }: { jobs: AdminJob[]; loading: boolean }) {
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">Status</th>
               <th className="px-5 py-3 font-medium">Type</th>
@@ -669,31 +740,31 @@ function JobsTable({ jobs, loading }: { jobs: AdminJob[]; loading: boolean }) {
               <th className="px-5 py-3 font-medium">Failure</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e4ebe7]">
+          <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={6} />
             ) : jobs.length === 0 ? (
               <EmptyRow columns={6} label="No generation jobs recorded yet." />
             ) : (
               jobs.map((job) => (
-                <tr key={job.id} className="hover:bg-[#f7faf8]">
-                  <td className="px-5 py-3.5">
+                <tr key={job.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
                     <StatusBadge status={job.status} />
                   </td>
-                  <td className="px-5 py-3.5 font-medium">
+                  <td className="px-5 py-3 font-medium">
                     {job.jobType.replace(/_/g, " ")}
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {job.userEmail ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {job.workspaceName ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5 text-[#64736c]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {formatDate(job.createdAt)}
                   </td>
                   <td
-                    className="max-w-64 truncate px-5 py-3.5 text-[#a0463f]"
+                    className="max-w-64 truncate px-5 py-3 text-destructive"
                     title={job.errorMessage ?? undefined}
                   >
                     {job.errorCode ?? "—"}
@@ -722,7 +793,7 @@ function AgentRunsTable({
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] text-left text-sm">
-          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">Status</th>
               <th className="px-5 py-3 font-medium">Session</th>
@@ -733,44 +804,44 @@ function AgentRunsTable({
               <th className="px-5 py-3 font-medium">Error</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e4ebe7]">
+          <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={7} />
             ) : runs.length === 0 ? (
               <EmptyRow columns={7} label="No agent runs recorded yet." />
             ) : (
               runs.map((run) => (
-                <tr key={run.id} className="hover:bg-[#f7faf8]">
-                  <td className="px-5 py-3.5">
+                <tr key={run.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
                     <StatusBadge status={run.status} />
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     <div className="font-medium">
                       {run.sessionTitle ?? "Untitled session"}
                     </div>
-                    <div className="max-w-56 truncate text-xs text-[#64736c]">
+                    <div className="max-w-56 truncate text-xs text-muted-foreground">
                       {run.threadId}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {run.userEmail ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <div className="text-[#526259]">
+                  <td className="px-5 py-3">
+                    <div className="text-muted-foreground">
                       {run.workspaceName ?? "—"}
                     </div>
-                    <div className="text-xs text-[#8a9890]">
+                    <div className="text-xs text-muted-foreground">
                       {run.projectName ?? run.canvasName ?? "—"}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {run.model ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5 text-[#64736c]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {formatDate(run.createdAt)}
                   </td>
                   <td
-                    className="max-w-72 truncate px-5 py-3.5 text-[#a0463f]"
+                    className="max-w-72 truncate px-5 py-3 text-destructive"
                     title={run.errorMessage ?? undefined}
                   >
                     {run.errorCode ?? "—"}
@@ -796,7 +867,7 @@ function LedgerTable({
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[780px] text-left text-sm">
-          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">Type</th>
               <th className="px-5 py-3 font-medium">User</th>
@@ -806,38 +877,43 @@ function LedgerTable({
               <th className="px-5 py-3 font-medium">Time</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e4ebe7]">
+          <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={6} />
             ) : transactions.length === 0 ? (
               <EmptyRow columns={6} label="No credit activity recorded yet." />
             ) : (
               transactions.map((item) => (
-                <tr key={item.id} className="hover:bg-[#f7faf8]">
-                  <td className="px-5 py-3.5">
-                    <span className="capitalize text-[#426457]">
+                <tr key={item.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
+                    <span className="capitalize text-muted-foreground">
                       {item.transactionType.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {item.userEmail ?? item.workspaceName ?? "—"}
                   </td>
                   <td
-                    className={`px-5 py-3.5 font-semibold tabular-nums ${item.amount >= 0 ? "text-[#16835e]" : "text-[#b44d45]"}`}
+                    className={cn(
+                      "px-5 py-3 font-semibold tabular-nums",
+                      item.amount >= 0
+                        ? "text-emerald-700"
+                        : "text-destructive",
+                    )}
                   >
                     {item.amount >= 0 ? "+" : ""}
                     {item.amount.toLocaleString()}
                   </td>
-                  <td className="px-5 py-3.5 tabular-nums">
+                  <td className="px-5 py-3 tabular-nums">
                     {item.balanceAfter.toLocaleString()}
                   </td>
                   <td
-                    className="max-w-72 truncate px-5 py-3.5 text-[#64736c]"
+                    className="max-w-72 truncate px-5 py-3 text-muted-foreground"
                     title={item.description ?? undefined}
                   >
                     {item.description ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5 text-[#64736c]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {formatDate(item.createdAt)}
                   </td>
                 </tr>
@@ -861,7 +937,7 @@ function AuditTable({
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
-          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">Action</th>
               <th className="px-5 py-3 font-medium">Operator</th>
@@ -870,7 +946,7 @@ function AuditTable({
               <th className="px-5 py-3 font-medium">Time</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#e4ebe7]">
+          <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={5} />
             ) : events.length === 0 ? (
@@ -880,21 +956,21 @@ function AuditTable({
               />
             ) : (
               events.map((event) => (
-                <tr key={event.id} className="hover:bg-[#f7faf8]">
-                  <td className="px-5 py-3.5 font-medium">{event.action}</td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                <tr key={event.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3 font-medium">{event.action}</td>
+                  <td className="px-5 py-3 text-muted-foreground">
                     {event.actorEmail}
                   </td>
-                  <td className="px-5 py-3.5 text-[#526259]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {event.targetEmail ?? event.workspaceName ?? "—"}
                   </td>
                   <td
-                    className="max-w-72 truncate px-5 py-3.5 text-[#64736c]"
+                    className="max-w-72 truncate px-5 py-3 text-muted-foreground"
                     title={JSON.stringify(event.metadata)}
                   >
                     {auditSummary(event.metadata)}
                   </td>
-                  <td className="px-5 py-3.5 text-[#64736c]">
+                  <td className="px-5 py-3 text-muted-foreground">
                     {formatDate(event.createdAt)}
                   </td>
                 </tr>
@@ -923,91 +999,96 @@ function UserDetailDialog({
   const user = detail?.user;
 
   return (
-    <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>User detail</DialogTitle>
-          <DialogDescription>
+    <Sheet open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>User details</SheetTitle>
+          <SheetDescription>
             {user
               ? `${user.displayName} · ${user.email}`
               : "Loading account, workspace, credits, and execution activity."}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        {user && (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailTile label="Plan">
-              <PlanBadge plan={user.plan} />
-            </DetailTile>
-            <DetailTile label="Balance">
-              <span className="tabular-nums">
-                {user.balance.toLocaleString()}
-              </span>
-            </DetailTile>
-            <DetailTile label="Workspace">
-              <span className="truncate">{user.workspaceName ?? "—"}</span>
-            </DetailTile>
-            <DetailTile label="Access">
-              <span className="inline-flex items-center gap-1">
-                {user.isPlatformAdmin && <ShieldCheck className="size-3.5" />}
-                {user.isPlatformAdmin ? "Platform admin" : "Workspace user"}
-              </span>
-            </DetailTile>
-            <DetailTile label="Registered">
-              {formatDate(user.createdAt)}
-            </DetailTile>
-            <DetailTile label="Last sign-in">
-              {user.lastSignInAt ? formatDate(user.lastSignInAt) : "Never"}
-            </DetailTile>
-            <DetailTile label="User ID">
-              <span className="truncate text-xs">{user.id}</span>
-            </DetailTile>
-            <DetailTile label="Workspace ID">
-              <span className="truncate text-xs">
-                {user.workspaceId ?? "—"}
-              </span>
-            </DetailTile>
-          </div>
-        )}
+        <SheetBody>
+          {user && (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-b pb-6">
+              <DetailTile label="Plan">
+                <PlanBadge plan={user.plan} />
+              </DetailTile>
+              <DetailTile label="Balance">
+                <span className="tabular-nums">
+                  {user.balance.toLocaleString()}
+                </span>
+              </DetailTile>
+              <DetailTile label="Workspace">
+                <span className="truncate">{user.workspaceName ?? "—"}</span>
+              </DetailTile>
+              <DetailTile label="Access">
+                <span className="inline-flex items-center gap-1">
+                  {user.isPlatformAdmin && <ShieldCheck className="size-3.5" />}
+                  {user.isPlatformAdmin ? "Platform admin" : "Workspace user"}
+                </span>
+              </DetailTile>
+              <DetailTile label="Registered">
+                {formatDate(user.createdAt)}
+              </DetailTile>
+              <DetailTile label="Last sign-in">
+                {user.lastSignInAt ? formatDate(user.lastSignInAt) : "Never"}
+              </DetailTile>
+              <DetailTile label="User ID">
+                <span className="truncate text-xs">{user.id}</span>
+              </DetailTile>
+              <DetailTile label="Workspace ID">
+                <span className="truncate text-xs">
+                  {user.workspaceId ?? "—"}
+                </span>
+              </DetailTile>
+            </div>
+          )}
 
-        {error && (
-          <div
-            className="mt-5 flex items-start gap-3 border border-[#e9bebe] bg-[#fff7f6] p-3 text-sm text-[#8e2f2b]"
-            role="alert"
-          >
-            <BadgeAlert className="mt-0.5 size-4 shrink-0" />
-            <div>{error}</div>
-          </div>
-        )}
+          {error && (
+            <div
+              className="mt-5 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              role="alert"
+            >
+              <BadgeAlert className="mt-0.5 size-4 shrink-0" />
+              <div>{error}</div>
+            </div>
+          )}
 
-        {loading && (
-          <div className="mt-5 flex items-center gap-2 text-sm text-[#64736c]">
-            <Loader2 className="size-4 animate-spin text-[#24855f]" />
-            Loading recent activity
-          </div>
-        )}
+          {loading && (
+            <div
+              className="mt-6 space-y-3"
+              aria-label="Loading recent activity"
+            >
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+            </div>
+          )}
 
-        {detail && !loading && (
-          <div className="mt-5 grid gap-4 xl:grid-cols-3">
-            <RecentTransactionsPanel transactions={detail.recentTransactions} />
-            <RecentJobsPanel jobs={detail.recentJobs} />
-            <RecentAgentRunsPanel runs={detail.recentAgentRuns} />
-          </div>
-        )}
+          {detail && !loading && (
+            <div className="mt-6 space-y-6">
+              <RecentTransactionsPanel
+                transactions={detail.recentTransactions}
+              />
+              <RecentJobsPanel jobs={detail.recentJobs} />
+              <RecentAgentRunsPanel runs={detail.recentAgentRuns} />
+            </div>
+          )}
+        </SheetBody>
 
-        <DialogFooter className="mt-6">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Close
-          </Button>
+        <SheetFooter>
           {user?.workspaceId && (
             <Button type="button" onClick={() => onAdjust(user)}>
               <Coins data-icon="inline-start" />
               Adjust credits
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1019,11 +1100,9 @@ function DetailTile({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 border border-[#d9e2dd] bg-[#f8fbf9] p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-[#64736c]">
-        {label}
-      </div>
-      <div className="mt-2 min-w-0 text-sm font-medium text-[#17211e]">
+    <div className="min-w-0">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="mt-1 min-w-0 text-sm font-medium text-foreground">
         {children}
       </div>
     </div>
@@ -1040,15 +1119,15 @@ function DetailPanel({
   children: React.ReactNode[];
 }) {
   return (
-    <section className="min-w-0 border border-[#d9e2dd]">
-      <div className="border-b border-[#d9e2dd] bg-[#edf3f0] px-4 py-3">
+    <section className="min-w-0">
+      <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
       </div>
-      <div className="divide-y divide-[#e4ebe7]">
+      <div className="mt-2 divide-y rounded-md border">
         {children.length > 0 ? (
           children
         ) : (
-          <div className="px-4 py-8 text-center text-sm text-[#64736c]">
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
             {emptyLabel}
           </div>
         )}
@@ -1067,20 +1146,23 @@ function RecentTransactionsPanel({
       {transactions.map((item) => (
         <div key={item.id} className="px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
-            <span className="capitalize text-[#426457]">
+            <span className="capitalize text-muted-foreground">
               {item.transactionType.replace(/_/g, " ")}
             </span>
             <span
-              className={`font-semibold tabular-nums ${item.amount >= 0 ? "text-[#16835e]" : "text-[#b44d45]"}`}
+              className={cn(
+                "font-semibold tabular-nums",
+                item.amount >= 0 ? "text-emerald-700" : "text-destructive",
+              )}
             >
               {item.amount >= 0 ? "+" : ""}
               {item.amount.toLocaleString()}
             </span>
           </div>
-          <div className="mt-1 truncate text-xs text-[#64736c]">
+          <div className="mt-1 truncate text-xs text-muted-foreground">
             {item.description ?? "No reason recorded"}
           </div>
-          <div className="mt-1 text-xs text-[#8a9890]">
+          <div className="mt-1 text-xs text-muted-foreground">
             Balance {item.balanceAfter.toLocaleString()} ·{" "}
             {formatDate(item.createdAt)}
           </div>
@@ -1104,12 +1186,12 @@ function RecentJobsPanel({ jobs }: { jobs: AdminJob[] }) {
             </span>
             <StatusBadge status={job.status} />
           </div>
-          <div className="mt-1 text-xs text-[#64736c]">
+          <div className="mt-1 text-xs text-muted-foreground">
             {formatDate(job.createdAt)}
           </div>
           {(job.errorCode || job.errorMessage) && (
             <div
-              className="mt-1 truncate text-xs text-[#a0463f]"
+              className="mt-1 truncate text-xs text-destructive"
               title={job.errorMessage ?? undefined}
             >
               {job.errorCode ?? job.errorMessage}
@@ -1132,10 +1214,10 @@ function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
             </span>
             <StatusBadge status={run.status} />
           </div>
-          <div className="mt-1 truncate text-xs text-[#64736c]">
+          <div className="mt-1 truncate text-xs text-muted-foreground">
             {run.model ?? "No model"} · {run.threadId}
           </div>
-          <div className="mt-1 text-xs text-[#8a9890]">
+          <div className="mt-1 text-xs text-muted-foreground">
             {formatDate(run.createdAt)}
             {run.completedAt
               ? ` · Completed ${formatDate(run.completedAt)}`
@@ -1143,7 +1225,7 @@ function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
           </div>
           {(run.errorCode || run.errorMessage) && (
             <div
-              className="mt-1 truncate text-xs text-[#a0463f]"
+              className="mt-1 truncate text-xs text-destructive"
               title={run.errorMessage ?? undefined}
             >
               {run.errorCode ?? run.errorMessage}
@@ -1157,7 +1239,7 @@ function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
 
 function PlanBadge({ plan }: { plan: string }) {
   return (
-    <span className="inline-flex rounded-full border border-[#cfe1d7] bg-[#f2faf5] px-2 py-0.5 text-xs font-medium capitalize text-[#32634e]">
+    <span className="inline-flex rounded-md border bg-muted/50 px-2 py-0.5 text-xs font-medium capitalize text-foreground">
       {plan}
     </span>
   );
@@ -1165,15 +1247,15 @@ function PlanBadge({ plan }: { plan: string }) {
 function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "succeeded" || status === "completed"
-      ? "border-[#b9e2cd] bg-[#edf9f1] text-[#22754e]"
+      ? "border-transparent bg-emerald-100 text-emerald-800"
       : status === "failed" || status === "dead_letter"
-        ? "border-[#ecc7c4] bg-[#fff4f3] text-[#a8443c]"
+        ? "border-transparent bg-red-100 text-red-800"
         : status === "running"
-          ? "border-[#bfdaea] bg-[#f0f8fc] text-[#2e6c91]"
-          : "border-[#dfd8c3] bg-[#fbf8ef] text-[#806d34]";
+          ? "border-transparent bg-blue-100 text-blue-800"
+          : "border-transparent bg-muted text-muted-foreground";
   return (
     <span
-      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
+      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
     >
       {status.replace(/_/g, " ")}
     </span>
@@ -1187,7 +1269,7 @@ function LoadingRows({ columns }: { columns: number }) {
       {skeletonRows.map((rowId) => (
         <tr key={rowId}>
           <td colSpan={columns} className="px-5 py-4">
-            <div className="h-4 animate-pulse bg-[#edf3f0]" />
+            <div className="h-4 animate-pulse rounded bg-muted" />
           </td>
         </tr>
       ))}
@@ -1199,9 +1281,9 @@ function EmptyRow({ columns, label }: { columns: number; label: string }) {
     <tr>
       <td
         colSpan={columns}
-        className="px-5 py-12 text-center text-sm text-[#64736c]"
+        className="px-5 py-12 text-center text-sm text-muted-foreground"
       >
-        <Database className="mx-auto mb-3 size-5 text-[#9daaa3]" />
+        <Database className="mx-auto mb-3 size-5 text-muted-foreground/60" />
         {label}
       </td>
     </tr>
@@ -1228,9 +1310,9 @@ function auditSummary(metadata: Record<string, unknown>) {
 
 function AdminLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f4f7f6]">
-      <div className="flex items-center gap-3 text-sm text-[#526259]">
-        <Loader2 className="size-4 animate-spin text-[#24855f]" />
+    <div className="flex min-h-screen items-center justify-center bg-muted/30">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
         Loading Admin Console
       </div>
     </div>
@@ -1238,15 +1320,15 @@ function AdminLoading() {
 }
 function AccessDenied() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f4f7f6] p-6">
-      <div className="w-full max-w-md border border-[#d9e2dd] bg-white p-6">
-        <span className="flex size-10 items-center justify-center rounded-md bg-[#fff0ee] text-[#b44d45]">
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
+      <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-sm">
+        <span className="flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
           <ShieldCheck className="size-5" />
         </span>
         <h1 className="mt-5 text-xl font-semibold">
           Administrator access required
         </h1>
-        <p className="mt-2 text-sm text-[#64736c]">
+        <p className="mt-2 text-sm text-muted-foreground">
           This account can use the creative workspace but does not have platform
           operations access.
         </p>
