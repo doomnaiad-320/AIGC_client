@@ -273,6 +273,18 @@ export async function updateProfile(
   return (await response.json()) as ProfileUpdateResponse;
 }
 
+export async function changePassword(
+  accessToken: string,
+  data: { currentPassword: string; newPassword: string },
+): Promise<void> {
+  const response = await fetch(`${getServerBaseUrl()}/api/auth/password`, {
+    method: "POST",
+    headers: authJsonHeaders(accessToken),
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) return handleErrorResponse(response);
+}
+
 export async function fetchWorkspaceSettings(
   accessToken: string,
 ): Promise<WorkspaceSettingsResponse> {

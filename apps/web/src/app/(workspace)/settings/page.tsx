@@ -11,6 +11,7 @@ import { SettingsSkeleton } from "@/components/skeletons/settings-skeleton";
 import { useAuth } from "@/lib/auth-context";
 import {
   ApiAuthError,
+  changePassword,
   fetchModels,
   fetchViewer,
   fetchWorkspaceSettings,
@@ -107,6 +108,15 @@ export default function SettingsPage() {
     [getToken],
   );
 
+  const handlePasswordChange = useCallback(
+    async (data: { currentPassword: string; newPassword: string }) => {
+      const token = getToken();
+      if (!token) return;
+      await changePassword(token, data);
+    },
+    [getToken],
+  );
+
   const stableFetchModels = useCallback(() => fetchModels(), []);
 
   if (pageLoading) {
@@ -147,6 +157,7 @@ export default function SettingsPage() {
             displayName={profile.displayName}
             email={profile.email}
             onSave={handleProfileSave}
+            onPasswordChange={handlePasswordChange}
           />
         ) : activeTab === "agent" ? (
           <AgentSection

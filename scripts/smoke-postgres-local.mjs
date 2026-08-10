@@ -7,6 +7,7 @@ const baseUrl = (process.env.LOOMIC_SMOKE_BASE_URL ?? "http://127.0.0.1:3001").r
 const startedAt = Date.now();
 const email = `smoke-${startedAt}@test.loomic.local`;
 const password = "local-smoke-password";
+const updatedPassword = "updated-local-smoke-password";
 
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -116,6 +117,32 @@ async function main() {
     throw new Error("The locally stored canvas asset could not be loaded.");
   }
 
+  const passwordChange = await request("/api/auth/password", {
+    body: JSON.stringify({ currentPassword: password, newPassword: updatedPassword }),
+    headers: authHeaders,
+    method: "POST",
+  });
+  if (passwordChange.status !== 204) {
+    throw new Error("Password update did not return success.");
+  }
+
+  const oldLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    body: JSON.stringify({ email, password }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  if (oldLogin.status !== 401) {
+    throw new Error("The old password remained valid after the password update.");
+  }
+
+  const newLogin = await request("/api/auth/login", {
+    body: JSON.stringify({ email, password: updatedPassword }),
+    method: "POST",
+  });
+  if (!newLogin.body?.session?.access_token) {
+    throw new Error("The new password could not establish a session.");
+  }
+
   console.log(
     JSON.stringify(
       {
@@ -125,6 +152,7 @@ async function main() {
         plan: viewer.body?.credits?.plan,
         projectCreate: created.status,
         projectList: listed.status,
+        passwordChange: passwordChange.status,
         register: register.status,
         timestampDriftSeconds: Math.round((createdAt - startedAt) / 1000),
         viewer: viewer.status,

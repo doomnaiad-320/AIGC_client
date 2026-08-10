@@ -263,7 +263,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   void registerHealthRoutes(app, env);
-  void registerAuthRoutes(app, { env, getAdminClient });
+  void registerAuthRoutes(app, { auth, env, getAdminClient });
   registerLocalStorageRoutes(app, env);
   void registerFontsRoutes(app, { env });
   void registerImageProxyRoute(app);
