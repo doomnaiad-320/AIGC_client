@@ -1,11 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { type LucideIcon, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { LoomicLogo } from "@/components/icons/loomic-logo";
 import { CreditBalance } from "@/components/credits/credit-balance";
+import { LoomicLogo } from "@/components/icons/loomic-logo";
+import { fetchAdminMe } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +20,8 @@ interface NavItem {
   href: string;
   label: string;
   /** SVG path `d` attribute */
-  icon: string;
+  icon?: string;
+  iconComponent?: LucideIcon;
   /** viewBox dimensions (square), e.g. 20 -> "0 0 20 20" */
   viewBox: number;
 }
@@ -56,6 +60,13 @@ const SETTINGS_ITEM: NavItem = {
   icon: "M10 1.667a5 5 0 0 1 2.525 9.313c3.355 1.035 5.844 4.047 6.03 7.37.013.22-.167.4-.388.4h-.5a.423.423 0 0 1-.414-.4C17.02 14.982 13.88 11.9 10 11.9s-7.02 3.082-7.252 6.45a.423.423 0 0 1-.414.4h-.501c-.22 0-.4-.18-.389-.4.187-3.323 2.675-6.333 6.029-7.369A5 5 0 0 1 10 1.667m0 1.3a3.7 3.7 0 1 0 .001 7.401A3.7 3.7 0 0 0 10 2.967",
 };
 
+const ADMIN_ITEM: NavItem = {
+  href: "/admin",
+  label: "Admin Console",
+  viewBox: 20,
+  iconComponent: ShieldCheck,
+};
+
 // ---------------------------------------------------------------------------
 // Reusable nav-button with active indicator
 // Touch target: min 44px on mobile, 36px on desktop (md+)
@@ -69,6 +80,7 @@ function NavButton({
   active: boolean;
 }) {
   const vb = `0 0 ${item.viewBox} ${item.viewBox}`;
+  const Icon = item.iconComponent;
 
   return (
     <Link
@@ -85,20 +97,35 @@ function NavButton({
           transition={{ type: "spring", stiffness: 350, damping: 30 }}
         />
       )}
-      <motion.svg
-        viewBox={vb}
-        fill="currentColor"
-        xmlns="http://www.w3.org/2000/svg"
-        className={cn(
-          "relative h-5 w-5",
-          active ? "text-foreground" : "text-muted-foreground",
-        )}
-        whileHover={{ scale: 1.15 }}
-        whileTap={{ scale: 0.9 }}
-        transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      >
-        <path d={item.icon} />
-      </motion.svg>
+      {Icon ? (
+        <motion.span
+          className={cn(
+            "relative flex h-5 w-5 items-center justify-center",
+            active ? "text-foreground" : "text-muted-foreground",
+          )}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        >
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </motion.span>
+      ) : (
+        <motion.svg
+          viewBox={vb}
+          fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+          className={cn(
+            "relative h-5 w-5",
+            active ? "text-foreground" : "text-muted-foreground",
+          )}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        >
+          <path d={item.icon} />
+        </motion.svg>
+      )}
     </Link>
   );
 }
@@ -108,7 +135,7 @@ function NavButton({
 // Each item has min 48px touch target for comfortable tapping.
 // ---------------------------------------------------------------------------
 
-function MobileBottomBar() {
+function MobileBottomBar({ isPlatformAdmin }: { isPlatformAdmin: boolean }) {
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -117,36 +144,43 @@ function MobileBottomBar() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-border bg-card/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)] md:hidden"
-      role="navigation"
       aria-label="Main navigation"
     >
-      {TOP_NAV_ITEMS.map((item) => {
-        const active = isActive(item.href);
-        const vb = `0 0 ${item.viewBox} ${item.viewBox}`;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-label={item.label}
-            className={cn(
-              "flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-0.5 px-2 py-1.5 transition-colors",
-              active ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            <svg
-              viewBox={vb}
-              fill="currentColor"
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
+      {[...TOP_NAV_ITEMS, ...(isPlatformAdmin ? [ADMIN_ITEM] : [])].map(
+        (item) => {
+          const active = isActive(item.href);
+          const vb = `0 0 ${item.viewBox} ${item.viewBox}`;
+          const Icon = item.iconComponent;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-label={item.label}
+              className={cn(
+                "flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-0.5 px-2 py-1.5 transition-colors",
+                active ? "text-foreground" : "text-muted-foreground",
+              )}
             >
-              <path d={item.icon} />
-            </svg>
-            <span className="text-[10px] font-medium leading-none">
-              {item.label}
-            </span>
-          </Link>
-        );
-      })}
+              {Icon ? (
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <svg
+                  viewBox={vb}
+                  fill="currentColor"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                >
+                  <path d={item.icon} />
+                </svg>
+              )}
+              <span className="text-[10px] font-medium leading-none">
+                {item.label}
+              </span>
+            </Link>
+          );
+        },
+      )}
 
       {/* Settings in bottom bar */}
       <Link
@@ -163,6 +197,7 @@ function MobileBottomBar() {
           viewBox={`0 0 ${SETTINGS_ITEM.viewBox} ${SETTINGS_ITEM.viewBox}`}
           fill="currentColor"
           xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
           className="h-5 w-5"
         >
           <path d={SETTINGS_ITEM.icon} />
@@ -182,7 +217,31 @@ function MobileBottomBar() {
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { session, signOut } = useAuth();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAdminAccess() {
+      if (!session?.access_token) {
+        setIsPlatformAdmin(false);
+        return;
+      }
+
+      try {
+        const access = await fetchAdminMe(session.access_token);
+        if (!cancelled) setIsPlatformAdmin(access.isPlatformAdmin);
+      } catch {
+        if (!cancelled) setIsPlatformAdmin(false);
+      }
+    }
+
+    void loadAdminAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.access_token]);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -213,12 +272,12 @@ export function AppSidebar() {
 
         {/* Top nav items */}
         {TOP_NAV_ITEMS.map((item) => (
-          <NavButton
-            key={item.href}
-            item={item}
-            active={isActive(item.href)}
-          />
+          <NavButton key={item.href} item={item} active={isActive(item.href)} />
         ))}
+
+        {isPlatformAdmin && (
+          <NavButton item={ADMIN_ITEM} active={isActive(ADMIN_ITEM.href)} />
+        )}
 
         {/* Spacer pushes bottom section down */}
         <div className="flex-1" />
@@ -227,10 +286,7 @@ export function AppSidebar() {
         <CreditBalance />
 
         {/* Settings / Profile */}
-        <NavButton
-          item={SETTINGS_ITEM}
-          active={isActive(SETTINGS_ITEM.href)}
-        />
+        <NavButton item={SETTINGS_ITEM} active={isActive(SETTINGS_ITEM.href)} />
 
         {/* Sign out */}
         <button
@@ -244,18 +300,22 @@ export function AppSidebar() {
             viewBox="0 0 20 20"
             fill="currentColor"
             xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
             className="h-5 w-5 text-muted-foreground"
             whileHover={{ scale: 1.15 }}
             whileTap={{ scale: 0.9 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            <path d="M3 4.5A2.5 2.5 0 0 1 5.5 2h5A2.5 2.5 0 0 1 13 4.5v1a.5.5 0 0 1-1 0v-1A1.5 1.5 0 0 0 10.5 3h-5A1.5 1.5 0 0 0 4 4.5v11A1.5 1.5 0 0 0 5.5 17h5a1.5 1.5 0 0 0 1.5-1.5v-1a.5.5 0 0 1 1 0v1A2.5 2.5 0 0 1 10.5 18h-5A2.5 2.5 0 0 1 3 15.5zm12.354-1.354a.5.5 0 0 0-.708.708L16.793 6H7.5a.5.5 0 0 0 0 1h9.293l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708z" transform="translate(0, 4)" />
+            <path
+              d="M3 4.5A2.5 2.5 0 0 1 5.5 2h5A2.5 2.5 0 0 1 13 4.5v1a.5.5 0 0 1-1 0v-1A1.5 1.5 0 0 0 10.5 3h-5A1.5 1.5 0 0 0 4 4.5v11A1.5 1.5 0 0 0 5.5 17h5a1.5 1.5 0 0 0 1.5-1.5v-1a.5.5 0 0 1 1 0v1A2.5 2.5 0 0 1 10.5 18h-5A2.5 2.5 0 0 1 3 15.5zm12.354-1.354a.5.5 0 0 0-.708.708L16.793 6H7.5a.5.5 0 0 0 0 1h9.293l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708z"
+              transform="translate(0, 4)"
+            />
           </motion.svg>
         </button>
       </aside>
 
       {/* Mobile bottom navigation bar */}
-      <MobileBottomBar />
+      <MobileBottomBar isPlatformAdmin={isPlatformAdmin} />
     </>
   );
 }

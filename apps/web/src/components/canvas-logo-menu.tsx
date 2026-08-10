@@ -8,13 +8,15 @@ import {
   Maximize2,
   Plus,
   Redo2,
+  ShieldCheck,
   Trash2,
   Undo2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LoomicLogo } from "@/components/icons/loomic-logo";
+import { useToast } from "@/components/toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,14 +26,14 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCreateProject } from "@/hooks/use-create-project";
+import { fetchAdminMe } from "@/lib/admin-api";
 import {
   createExcalidrawImageElement,
   getViewportCenter,
   scaleToFit,
 } from "@/lib/canvas-elements";
 import { deleteProject } from "@/lib/server-api";
-import { useToast } from "@/components/toast";
-import { useCreateProject } from "@/hooks/use-create-project";
 
 interface CanvasLogoMenuProps {
   accessToken: string;
@@ -40,6 +42,14 @@ interface CanvasLogoMenuProps {
   // biome-ignore lint/suspicious/noExplicitAny: Excalidraw API has no public type definition
   excalidrawApi: any | null;
 }
+
+type ExcalidrawElementLike = {
+  id: string;
+  isDeleted?: boolean;
+  x: number;
+  y: number;
+  [key: string]: unknown;
+};
 
 function dispatchKeyToExcalidraw(
   key: string,
@@ -77,22 +87,40 @@ export function CanvasLogoMenu({
   const { create: createNewProject } = useCreateProject();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchAdminMe(accessToken)
+      .then((access) => {
+        if (!cancelled) setIsPlatformAdmin(access.isPlatformAdmin);
+      })
+      .catch(() => {
+        if (!cancelled) setIsPlatformAdmin(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const handleDuplicateElements = useCallback(() => {
     if (!excalidrawApi) return;
     const appState = excalidrawApi.getAppState();
     const selectedIds: Record<string, boolean> =
       appState.selectedElementIds ?? {};
-    const allElements = excalidrawApi.getSceneElements();
+    const allElements =
+      excalidrawApi.getSceneElements() as ExcalidrawElementLike[];
     const selected = allElements.filter(
-      (el: any) => selectedIds[el.id] && !el.isDeleted,
+      (el) => selectedIds[el.id] && !el.isDeleted,
     );
 
     if (!selected.length) return;
 
     const OFFSET = 10;
     const newSelectedIds: Record<string, boolean> = {};
-    const clones = selected.map((el: any) => {
+    const clones = selected.map((el) => {
       const newId = generateFileId();
       newSelectedIds[newId] = true;
       return { ...el, id: newId, x: el.x + OFFSET, y: el.y + OFFSET };
@@ -196,6 +224,12 @@ export function CanvasLogoMenu({
               <FolderOpen className="size-4" />
               项目库
             </DropdownMenuItem>
+            {isPlatformAdmin && (
+              <DropdownMenuItem onClick={() => router.push("/admin")}>
+                <ShieldCheck className="size-4" />
+                管理后台
+              </DropdownMenuItem>
+            )}
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
