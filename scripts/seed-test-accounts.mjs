@@ -11,9 +11,16 @@ const PASSWORD = "opensourceloomic";
 const TEST_ACCOUNTS = [
   { credits: 50, email: "free@test.loomic.com", plan: "free" },
   { credits: 1_200, email: "starter@test.loomic.com", plan: "starter" },
-  { credits: 5_000, email: "pro@test.loomic.com", plan: "pro" },
+  {
+    credits: 5_000,
+    email: "pro@test.loomic.com",
+    plan: "pro",
+    platformAdmin: true,
+  },
   { credits: 15_000, email: "ultra@test.loomic.com", plan: "ultra" },
 ];
+
+const ADMIN_DEMO_SOURCE = "scripts/seed-test-accounts.mjs:admin-demo";
 
 async function loadEnv() {
   for (const envFile of [".env.local", ".env"]) {
@@ -28,7 +35,7 @@ async function loadEnv() {
         const key = trimmed.slice(0, separator).trim();
         let value = trimmed.slice(separator + 1).trim();
         if (
-          (value.startsWith("\"") && value.endsWith("\"")) ||
+          (value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))
         ) {
           value = value.slice(1, -1);
@@ -53,7 +60,9 @@ async function seedAccount(client, account) {
 
   await client.query("begin");
   try {
-    await client.query("select set_config('app.is_service_role', 'true', true)");
+    await client.query(
+      "select set_config('app.is_service_role', 'true', true)",
+    );
     const userResult = await client.query(
       `
         insert into public.app_users (email, password_hash, user_metadata)
@@ -150,6 +159,166 @@ async function seedAccount(client, account) {
   }
 }
 
+async function grantPlatformAdmins(client, seededAccounts) {
+  const adminAccounts = TEST_ACCOUNTS.filter(
+    (account) => account.platformAdmin,
+  );
+  for (const account of adminAccounts) {
+    const seeded = seededAccounts.get(account.email);
+    if (!seeded) continue;
+    await client.query(
+      `
+        insert into public.platform_admins (user_id, note)
+        values ($1, $2)
+        on conflict (user_id) do update
+        set note = excluded.note
+      `,
+      [seeded.userId, "Local platform administrator test account"],
+    );
+    console.log(`[ready] ${account.email} platform_admin=true`);
+  }
+}
+
+async function seedAdminDemoData(client, seededAccounts) {
+  const pro = seededAccounts.get("pro@test.loomic.com");
+  const starter = seededAccounts.get("starter@test.loomic.com");
+  const free = seededAccounts.get("free@test.loomic.com");
+  if (!pro || !starter || !free) {
+    throw new Error(
+      "Admin demo data requires free, starter, and pro accounts.",
+    );
+  }
+
+  await client.query("begin");
+  try {
+    await client.query(
+      "select set_config('app.is_service_role', 'true', true)",
+    );
+    await client.query(
+      "delete from public.background_jobs where payload->>'source' = $1",
+      [ADMIN_DEMO_SOURCE],
+    );
+    await client.query(
+      "delete from public.admin_audit_events where metadata->>'source' = $1",
+      [ADMIN_DEMO_SOURCE],
+    );
+
+    await client.query(
+      `
+        insert into public.background_jobs (
+          workspace_id,
+          queue_name,
+          job_type,
+          status,
+          payload,
+          result,
+          error_code,
+          error_message,
+          attempt_count,
+          max_attempts,
+          created_by,
+          created_at,
+          started_at,
+          completed_at,
+          failed_at
+        )
+        values
+          (
+            $1,
+            'image_generation_jobs',
+            'image_generation',
+            'succeeded',
+            jsonb_build_object('source', $7::text, 'prompt', 'Admin demo successful image job'),
+            jsonb_build_object('artifact', 'demo-image.png'),
+            null,
+            null,
+            1,
+            3,
+            $2,
+            now() - interval '50 minutes',
+            now() - interval '49 minutes',
+            now() - interval '47 minutes',
+            null
+          ),
+          (
+            $3,
+            'video_generation_jobs',
+            'video_generation',
+            'running',
+            jsonb_build_object('source', $7::text, 'prompt', 'Admin demo running video job'),
+            null,
+            null,
+            null,
+            1,
+            3,
+            $4,
+            now() - interval '18 minutes',
+            now() - interval '16 minutes',
+            null,
+            null
+          ),
+          (
+            $5,
+            'image_generation_jobs',
+            'image_generation',
+            'failed',
+            jsonb_build_object('source', $7::text, 'prompt', 'Admin demo failed image job'),
+            null,
+            'provider_timeout',
+            'Demo provider timed out while waiting for an image result.',
+            3,
+            3,
+            $6,
+            now() - interval '9 minutes',
+            now() - interval '8 minutes',
+            null,
+            now() - interval '6 minutes'
+          )
+      `,
+      [
+        pro.workspaceId,
+        pro.userId,
+        starter.workspaceId,
+        starter.userId,
+        free.workspaceId,
+        free.userId,
+        ADMIN_DEMO_SOURCE,
+      ],
+    );
+
+    await client.query(
+      `
+        insert into public.admin_audit_events (
+          actor_user_id,
+          action,
+          target_user_id,
+          target_workspace_id,
+          metadata
+        )
+        values
+          (
+            $1,
+            'admin.demo.seeded',
+            $2,
+            $3,
+            jsonb_build_object(
+              'source', $4::text,
+              'reason', 'Local admin console demo data seeded',
+              'amount', 0
+            )
+          )
+      `,
+      [pro.userId, free.userId, free.workspaceId, ADMIN_DEMO_SOURCE],
+    );
+
+    await client.query("commit");
+    console.log("[ready] admin console demo jobs and audit data");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  }
+}
+
 async function main() {
   await loadEnv();
   const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
@@ -164,12 +333,16 @@ async function main() {
   await client.connect();
   try {
     console.log("Seeding local PostgreSQL test accounts...");
+    const seededAccounts = new Map();
     for (const account of TEST_ACCOUNTS) {
       const result = await seedAccount(client, account);
+      seededAccounts.set(account.email, result);
       console.log(
         `[ready] ${account.email} plan=${account.plan} credits=${account.credits} user=${result.userId}`,
       );
     }
+    await grantPlatformAdmins(client, seededAccounts);
+    await seedAdminDemoData(client, seededAccounts);
   } finally {
     await client.end();
   }
