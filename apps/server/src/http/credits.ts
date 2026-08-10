@@ -17,11 +17,13 @@ import {
 } from "../features/credits/credit-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import type { RequestAuthenticator } from "../auth/user.js";
+import type { PlatformAdminService } from "../features/admin/platform-admin-service.js";
 
 export async function registerCreditRoutes(
   app: FastifyInstance,
   options: {
     auth: RequestAuthenticator;
+    adminService: PlatformAdminService;
     creditService: CreditService;
     viewerService: ViewerService;
   },
@@ -110,11 +112,22 @@ export async function registerCreditRoutes(
     }
   });
 
-  // POST /api/credits/admin/set-plan — dev-only plan change
+  // POST /api/credits/admin/set-plan — platform-admin-only plan change.
   app.post("/api/credits/admin/set-plan", async (request, reply) => {
     try {
       const user = await options.auth.authenticate(request);
       if (!user) return sendUnauthenticated(reply);
+
+      if (!(await options.adminService.isPlatformAdmin(user.id))) {
+        return reply.code(403).send(
+          applicationErrorResponseSchema.parse({
+            error: {
+              code: "platform_admin_required",
+              message: "Platform administrator access is required.",
+            },
+          }),
+        );
+      }
 
       const body = setPlanRequestSchema.parse(request.body);
       const viewer = await options.viewerService.ensureViewer(user);

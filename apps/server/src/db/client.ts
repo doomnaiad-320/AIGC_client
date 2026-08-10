@@ -28,7 +28,12 @@ export type DbClient = {
   storage: LocalStorageClient;
 };
 
-export type AdminDbClient = DbClient;
+export type AdminDbClient = DbClient & {
+  query<T = Record<string, unknown>>(
+    sql: string,
+    values?: unknown[],
+  ): Promise<DbResult<T[]>>;
+};
 export type UserDbClient = DbClient;
 
 type DbScope =
@@ -88,7 +93,20 @@ export function createAdminDbClient(
   >,
   pool = requirePostgresPool(env),
 ): AdminDbClient {
-  return createDbClient({ env, pool, scope: { kind: "admin" } });
+  const scope: DbScope = { kind: "admin" };
+  const client = createDbClient({ env, pool, scope });
+
+  return {
+    ...client,
+    async query<T = Record<string, unknown>>(sql: string, values: unknown[] = []) {
+      try {
+        const result = await executeScopedQuery(pool, scope, sql, values);
+        return { data: result.rows as T[], error: null };
+      } catch (error) {
+        return { data: null, error: toDbError(error) };
+      }
+    },
+  };
 }
 
 export function createUserDbClientFactory(
@@ -533,6 +551,18 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
       return {
         sql: "select * from public.increment_job_attempt($1::uuid)",
         values: [args.p_job_id],
+      };
+    case "admin_adjust_credits":
+      return {
+        sql: "select public.admin_adjust_credits($1::uuid, $2::uuid, $3::uuid, $4::int, $5::text) as result",
+        unwrapColumn: "result",
+        values: [
+          args.p_workspace_id,
+          args.p_target_user_id,
+          args.p_actor_user_id,
+          args.p_amount,
+          args.p_reason,
+        ],
       };
     default:
       throw new Error(`Unsupported database function: ${functionName}`);

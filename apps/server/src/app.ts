@@ -58,6 +58,10 @@ import {
   type TierGuard,
 } from "./features/credits/tier-guard.js";
 import {
+  createPlatformAdminService,
+  type PlatformAdminService,
+} from "./features/admin/platform-admin-service.js";
+import {
   createJobService,
   type JobService,
 } from "./features/jobs/job-service.js";
@@ -89,6 +93,7 @@ import { registerUploadRoutes } from "./http/uploads.js";
 import { registerSkillRoutes } from "./http/skills.js";
 import { registerMarketplaceRoutes } from "./http/skills-marketplace.js";
 import { registerViewerRoutes } from "./http/viewer.js";
+import { registerAdminRoutes } from "./http/admin.js";
 import { CanvasEventBuffer } from "./ws/event-buffer.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { registerWsRoute } from "./ws/handler.js";
@@ -105,6 +110,7 @@ export type BuildAppOptions = {
   agentModel?: BaseLanguageModel | string;
   agentPersistenceService?: AgentPersistenceService;
   agentRunMetadataService?: AgentRunMetadataService;
+  adminService?: PlatformAdminService;
   auth?: RequestAuthenticator;
   brandKitService?: BrandKitService;
   canvasService?: CanvasService;
@@ -195,6 +201,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       : undefined);
   const creditService =
     options.creditService ?? createCreditService({ getAdminClient });
+  const adminService =
+    options.adminService ?? createPlatformAdminService({ getAdminClient });
   const tierGuard =
     options.tierGuard ?? createTierGuard({ getAdminClient });
 
@@ -317,7 +325,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ...(jobService ? { jobService } : {}),
     ...(tierGuard ? { tierGuard } : {}),
   });
-  void registerCreditRoutes(app, { auth, creditService, viewerService });
+  void registerCreditRoutes(app, { auth, adminService, creditService, viewerService });
+  void registerAdminRoutes(app, { auth, adminService });
   if (jobService) {
     void registerJobRoutes(app, { auth, creditService, jobService, tierGuard, viewerService });
   }
