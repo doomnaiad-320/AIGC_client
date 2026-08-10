@@ -1,4 +1,5 @@
 import type {
+  AdminAgentRun,
   AdminAuditEvent,
   AdminCreditAdjustmentRequest,
   AdminCreditAdjustmentResponse,
@@ -6,6 +7,7 @@ import type {
   AdminJob,
   AdminOverview,
   AdminUser,
+  AdminUserDetail,
 } from "@loomic/shared";
 
 import { getServerBaseUrl } from "./env";
@@ -50,8 +52,22 @@ export function fetchAdminUsers(accessToken: string, search = "") {
   return get<{ users: AdminUser[] }>(accessToken, `/api/admin/users?${query}`);
 }
 
+export function fetchAdminUserDetail(accessToken: string, userId: string) {
+  return get<{ detail: AdminUserDetail }>(
+    accessToken,
+    `/api/admin/users/${userId}`,
+  );
+}
+
 export function fetchAdminJobs(accessToken: string) {
   return get<{ jobs: AdminJob[] }>(accessToken, "/api/admin/jobs?limit=100");
+}
+
+export function fetchAdminAgentRuns(accessToken: string) {
+  return get<{ runs: AdminAgentRun[] }>(
+    accessToken,
+    "/api/admin/agent-runs?limit=100",
+  );
 }
 
 export function fetchAdminTransactions(accessToken: string) {

@@ -44,6 +44,25 @@ export const adminJobSchema = z.object({
 });
 export type AdminJob = z.infer<typeof adminJobSchema>;
 
+export const adminAgentRunSchema = z.object({
+  id: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  sessionTitle: z.string().nullable(),
+  threadId: z.string(),
+  status: z.string(),
+  model: z.string().nullable(),
+  createdAt: z.string().datetime({ offset: true }),
+  completedAt: nullableTimestampSchema,
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  workspaceName: z.string().nullable(),
+  projectName: z.string().nullable(),
+  canvasName: z.string().nullable(),
+  userEmail: z.string().email().nullable(),
+  userDisplayName: z.string().nullable(),
+});
+export type AdminAgentRun = z.infer<typeof adminAgentRunSchema>;
+
 export const adminCreditTransactionSchema = z.object({
   id: z.string().uuid(),
   transactionType: z.string(),
@@ -70,6 +89,14 @@ export const adminAuditEventSchema = z.object({
   createdAt: z.string().datetime({ offset: true }),
 });
 export type AdminAuditEvent = z.infer<typeof adminAuditEventSchema>;
+
+export const adminUserDetailSchema = z.object({
+  user: adminUserSchema,
+  recentTransactions: z.array(adminCreditTransactionSchema),
+  recentJobs: z.array(adminJobSchema),
+  recentAgentRuns: z.array(adminAgentRunSchema),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 
 export const adminCreditAdjustmentRequestSchema = z.object({
   workspaceId: z.string().uuid(),

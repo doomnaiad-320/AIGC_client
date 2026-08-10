@@ -2,12 +2,14 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import {
+  adminAgentRunSchema,
   adminAuditEventSchema,
   adminCreditAdjustmentRequestSchema,
   adminCreditAdjustmentResponseSchema,
   adminCreditTransactionSchema,
   adminJobSchema,
   adminOverviewSchema,
+  adminUserDetailSchema,
   adminUserSchema,
   applicationErrorResponseSchema,
   unauthenticatedErrorResponseSchema,
@@ -23,6 +25,10 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().trim().max(120).optional(),
   status: z.string().trim().max(32).optional(),
+});
+
+const userParamsSchema = z.object({
+  userId: z.string().uuid(),
 });
 
 export async function registerAdminRoutes(
@@ -76,6 +82,20 @@ export async function registerAdminRoutes(
     }
   });
 
+  app.get("/api/admin/users/:userId", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const params = userParamsSchema.parse(request.params);
+      const detail = await options.adminService.getUserDetail(params.userId);
+      return reply
+        .code(200)
+        .send({ detail: adminUserDetailSchema.parse(detail) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
   app.get("/api/admin/jobs", async (request, reply) => {
     try {
       const user = await requirePlatformAdmin(request, reply, options);
@@ -88,6 +108,23 @@ export async function registerAdminRoutes(
       return reply
         .code(200)
         .send({ jobs: jobs.map((job) => adminJobSchema.parse(job)) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.get("/api/admin/agent-runs", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const query = listQuerySchema.parse(request.query);
+      const runs = await options.adminService.listAgentRuns({
+        ...(query.limit !== undefined ? { limit: query.limit } : {}),
+        ...(query.status !== undefined ? { status: query.status } : {}),
+      });
+      return reply
+        .code(200)
+        .send({ runs: runs.map((run) => adminAgentRunSchema.parse(run)) });
     } catch (error) {
       return sendAdminError(error, reply);
     }

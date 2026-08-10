@@ -1,4 +1,5 @@
 import type {
+  AdminAgentRun,
   AdminAuditEvent,
   AdminCreditAdjustmentRequest,
   AdminCreditAdjustmentResponse,
@@ -6,6 +7,7 @@ import type {
   AdminJob,
   AdminOverview,
   AdminUser,
+  AdminUserDetail,
 } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
@@ -14,6 +16,7 @@ export class PlatformAdminServiceError extends Error {
   constructor(
     readonly code:
       | "platform_admin_required"
+      | "admin_user_not_found"
       | "admin_query_failed"
       | "credit_adjustment_failed",
     message: string,
@@ -28,8 +31,18 @@ export type PlatformAdminService = {
   isPlatformAdmin(userId: string): Promise<boolean>;
   getOverview(): Promise<AdminOverview>;
   listUsers(input?: { limit?: number; search?: string }): Promise<AdminUser[]>;
-  listJobs(input?: { limit?: number; status?: string }): Promise<AdminJob[]>;
-  listTransactions(input?: { limit?: number }): Promise<
+  getUserDetail(userId: string): Promise<AdminUserDetail>;
+  listJobs(input?: {
+    limit?: number;
+    status?: string;
+    userId?: string;
+  }): Promise<AdminJob[]>;
+  listAgentRuns(input?: {
+    limit?: number;
+    status?: string;
+    userId?: string;
+  }): Promise<AdminAgentRun[]>;
+  listTransactions(input?: { limit?: number; workspaceId?: string }): Promise<
     AdminCreditTransaction[]
   >;
   listAuditEvents(input?: { limit?: number }): Promise<AdminAuditEvent[]>;
@@ -71,7 +84,7 @@ export function createPlatformAdminService(options: {
 }): PlatformAdminService {
   const getAdmin = options.getAdminClient;
 
-  return {
+  const service: PlatformAdminService = {
     async isPlatformAdmin(userId) {
       const { data, error } = await getAdmin()
         .from("platform_admins")
@@ -120,6 +133,48 @@ export function createPlatformAdminService(options: {
       return getMany(data, error, "Unable to load users.");
     },
 
+    async getUserDetail(userId) {
+      const { data, error } = await getAdmin().query<AdminUser>(
+        `
+          select ${USER_COLUMNS}
+          from public.app_users u
+          ${USER_JOINS}
+          where u.id = $1::uuid
+          limit 1
+        `,
+        [userId],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load user detail.",
+          500,
+        );
+      }
+      const user = data?.[0];
+      if (!user) {
+        throw new PlatformAdminServiceError(
+          "admin_user_not_found",
+          "User was not found.",
+          404,
+        );
+      }
+
+      const [recentTransactions, recentJobs, recentAgentRuns] =
+        await Promise.all([
+          user.workspaceId
+            ? service.listTransactions({
+                limit: 20,
+                workspaceId: user.workspaceId,
+              })
+            : Promise.resolve([]),
+          service.listJobs({ limit: 20, userId }),
+          service.listAgentRuns({ limit: 20, userId }),
+        ]);
+
+      return { recentAgentRuns, recentJobs, recentTransactions, user };
+    },
+
     async listJobs(input = {}) {
       const limit = clampLimit(input.limit, 50);
       const { data, error } = await getAdmin().query<AdminJob>(
@@ -141,12 +196,50 @@ export function createPlatformAdminService(options: {
           left join public.app_users u on u.id = j.created_by
           left join public.profiles p on p.id = j.created_by
           where ($1::text is null or j.status::text = $1)
+            and ($2::uuid is null or j.created_by = $2)
           order by j.created_at desc
-          limit $2::int
+          limit $3::int
         `,
-        [input.status?.trim() || null, limit],
+        [input.status?.trim() || null, input.userId ?? null, limit],
       );
       return getMany(data, error, "Unable to load jobs.");
+    },
+
+    async listAgentRuns(input = {}) {
+      const limit = clampLimit(input.limit, 50);
+      const { data, error } = await getAdmin().query<AdminAgentRun>(
+        `
+          select
+            ar.id,
+            ar.session_id as "sessionId",
+            cs.title as "sessionTitle",
+            ar.thread_id as "threadId",
+            ar.status,
+            ar.model,
+            ar.created_at as "createdAt",
+            ar.completed_at as "completedAt",
+            ar.error_code as "errorCode",
+            ar.error_message as "errorMessage",
+            w.name as "workspaceName",
+            pr.name as "projectName",
+            c.name as "canvasName",
+            u.email as "userEmail",
+            p.display_name as "userDisplayName"
+          from public.agent_runs ar
+          join public.chat_sessions cs on cs.id = ar.session_id
+          left join public.canvases c on c.id = cs.canvas_id
+          left join public.projects pr on pr.id = c.project_id
+          left join public.workspaces w on w.id = pr.workspace_id
+          left join public.app_users u on u.id = cs.created_by
+          left join public.profiles p on p.id = cs.created_by
+          where ($1::text is null or ar.status = $1)
+            and ($2::uuid is null or cs.created_by = $2)
+          order by ar.created_at desc
+          limit $3::int
+        `,
+        [input.status?.trim() || null, input.userId ?? null, limit],
+      );
+      return getMany(data, error, "Unable to load agent runs.");
     },
 
     async listTransactions(input = {}) {
@@ -167,10 +260,14 @@ export function createPlatformAdminService(options: {
           left join public.workspaces w on w.id = t.workspace_id
           left join public.app_users u on u.id = t.user_id
           left join public.profiles p on p.id = t.user_id
+          where ($1::uuid is null or t.workspace_id = $1)
           order by t.created_at desc
-          limit $1::int
+          limit $2::int
         `,
-        [clampLimit(input.limit, 50)],
+        [
+          "workspaceId" in input ? (input.workspaceId ?? null) : null,
+          clampLimit(input.limit, 50),
+        ],
       );
       return getMany(data, error, "Unable to load credit transactions.");
     },
@@ -232,6 +329,8 @@ export function createPlatformAdminService(options: {
       };
     },
   };
+
+  return service;
 }
 
 function clampLimit(value: number | undefined, fallback: number) {

@@ -1,16 +1,19 @@
 "use client";
 
 import type {
+  AdminAgentRun,
   AdminAuditEvent,
   AdminCreditTransaction,
   AdminJob,
   AdminOverview,
   AdminUser,
+  AdminUserDetail,
 } from "@loomic/shared";
 import {
   Activity,
   ArrowLeft,
   BadgeAlert,
+  Bot,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
@@ -41,20 +44,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   adjustAdminCredits,
+  fetchAdminAgentRuns,
   fetchAdminAuditEvents,
   fetchAdminJobs,
   fetchAdminMe,
   fetchAdminOverview,
   fetchAdminTransactions,
+  fetchAdminUserDetail,
   fetchAdminUsers,
 } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-context";
 
-type AdminTab = "users" | "jobs" | "ledger" | "audit";
+type AdminTab = "users" | "jobs" | "agent-runs" | "ledger" | "audit";
 
 const tabs: Array<{ id: AdminTab; label: string; icon: typeof Users }> = [
   { id: "users", label: "Users", icon: Users },
   { id: "jobs", label: "Jobs", icon: Workflow },
+  { id: "agent-runs", label: "Agent runs", icon: Bot },
   { id: "ledger", label: "Credit ledger", icon: Coins },
   { id: "audit", label: "Audit log", icon: ClipboardList },
 ];
@@ -69,6 +75,7 @@ export default function AdminPage() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AdminAgentRun[]>([]);
   const [transactions, setTransactions] = useState<AdminCreditTransaction[]>(
     [],
   );
@@ -82,6 +89,10 @@ export default function AdminPage() {
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
   const [savingAdjustment, setSavingAdjustment] = useState(false);
+  const [selectedUserDetail, setSelectedUserDetail] =
+    useState<AdminUserDetail | null>(null);
+  const [loadingUserDetail, setLoadingUserDetail] = useState(false);
+  const [userDetailError, setUserDetailError] = useState<string | null>(null);
 
   const load = useCallback(async (searchValue = "") => {
     const token = tokenRef.current;
@@ -96,17 +107,25 @@ export default function AdminPage() {
         return;
       }
       setAccessDenied(false);
-      const [overviewData, usersData, jobsData, transactionData, eventData] =
-        await Promise.all([
-          fetchAdminOverview(token),
-          fetchAdminUsers(token, searchValue),
-          fetchAdminJobs(token),
-          fetchAdminTransactions(token),
-          fetchAdminAuditEvents(token),
-        ]);
+      const [
+        overviewData,
+        usersData,
+        jobsData,
+        agentRunData,
+        transactionData,
+        eventData,
+      ] = await Promise.all([
+        fetchAdminOverview(token),
+        fetchAdminUsers(token, searchValue),
+        fetchAdminJobs(token),
+        fetchAdminAgentRuns(token),
+        fetchAdminTransactions(token),
+        fetchAdminAuditEvents(token),
+      ]);
       setOverview(overviewData.overview);
       setUsers(usersData.users);
       setJobs(jobsData.jobs);
+      setAgentRuns(agentRunData.runs);
       setTransactions(transactionData.transactions);
       setEvents(eventData.events);
     } catch (loadError) {
@@ -133,10 +152,37 @@ export default function AdminPage() {
     return () => window.clearTimeout(timer);
   }, [load, search, session?.access_token]);
 
+  async function openUserDetail(user: AdminUser) {
+    const token = tokenRef.current;
+    if (!token) return;
+    setLoadingUserDetail(true);
+    setUserDetailError(null);
+    setSelectedUserDetail({
+      recentAgentRuns: [],
+      recentJobs: [],
+      recentTransactions: [],
+      user,
+    });
+    try {
+      const { detail } = await fetchAdminUserDetail(token, user.id);
+      setSelectedUserDetail(detail);
+    } catch (detailError) {
+      setUserDetailError(
+        detailError instanceof Error
+          ? detailError.message
+          : "Unable to load user detail.",
+      );
+    } finally {
+      setLoadingUserDetail(false);
+    }
+  }
+
   async function submitAdjustment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const token = tokenRef.current;
-    if (!token || !adjustingUser?.workspaceId) return;
+    const adjustedUser = adjustingUser;
+    const workspaceId = adjustedUser?.workspaceId;
+    if (!token || !adjustedUser || !workspaceId) return;
 
     const amount = Number(adjustmentAmount);
     if (!Number.isInteger(amount) || amount === 0) {
@@ -152,8 +198,8 @@ export default function AdminPage() {
     setAdjustmentError(null);
     try {
       await adjustAdminCredits(token, {
-        workspaceId: adjustingUser.workspaceId,
-        targetUserId: adjustingUser.id,
+        workspaceId,
+        targetUserId: adjustedUser.id,
         amount,
         reason: adjustmentReason.trim(),
       });
@@ -161,6 +207,10 @@ export default function AdminPage() {
       setAdjustmentAmount("");
       setAdjustmentReason("");
       await load(search);
+      if (selectedUserDetail?.user.id === adjustedUser.id) {
+        const { detail } = await fetchAdminUserDetail(token, adjustedUser.id);
+        setSelectedUserDetail(detail);
+      }
     } catch (saveError) {
       setAdjustmentError(
         saveError instanceof Error
@@ -333,6 +383,7 @@ export default function AdminPage() {
                 loading={loadingData}
                 search={search}
                 onSearchChange={setSearch}
+                onView={(user) => void openUserDetail(user)}
                 onAdjust={(user) => {
                   setAdjustmentError(null);
                   setAdjustingUser(user);
@@ -340,6 +391,9 @@ export default function AdminPage() {
               />
             )}
             {tab === "jobs" && <JobsTable jobs={jobs} loading={loadingData} />}
+            {tab === "agent-runs" && (
+              <AgentRunsTable runs={agentRuns} loading={loadingData} />
+            )}
             {tab === "ledger" && (
               <LedgerTable transactions={transactions} loading={loadingData} />
             )}
@@ -409,6 +463,20 @@ export default function AdminPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <UserDetailDialog
+        detail={selectedUserDetail}
+        error={userDetailError}
+        loading={loadingUserDetail}
+        onClose={() => {
+          setSelectedUserDetail(null);
+          setUserDetailError(null);
+        }}
+        onAdjust={(user) => {
+          setAdjustmentError(null);
+          setAdjustingUser(user);
+        }}
+      />
     </div>
   );
 }
@@ -462,12 +530,14 @@ function UsersTable({
   loading,
   search,
   onSearchChange,
+  onView,
   onAdjust,
 }: {
   users: AdminUser[];
   loading: boolean;
   search: string;
   onSearchChange: (value: string) => void;
+  onView: (user: AdminUser) => void;
   onAdjust: (user: AdminUser) => void;
 }) {
   return (
@@ -546,20 +616,30 @@ function UsersTable({
                       : "Never"}
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    {user.workspaceId ? (
+                    <div className="flex justify-end gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onAdjust(user)}
+                        onClick={() => onView(user)}
                       >
-                        <Coins data-icon="inline-start" />
-                        Adjust
+                        Details
+                        <ChevronRight data-icon="inline-end" />
                       </Button>
-                    ) : (
-                      <span className="text-xs text-[#8a9890]">
-                        No workspace
-                      </span>
-                    )}
+                      {user.workspaceId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onAdjust(user)}
+                        >
+                          <Coins data-icon="inline-start" />
+                          Adjust
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-[#8a9890]">
+                          No workspace
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -617,6 +697,83 @@ function JobsTable({ jobs, loading }: { jobs: AdminJob[]; loading: boolean }) {
                     title={job.errorMessage ?? undefined}
                   >
                     {job.errorCode ?? "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </TableFrame>
+  );
+}
+
+function AgentRunsTable({
+  runs,
+  loading,
+}: {
+  runs: AdminAgentRun[];
+  loading: boolean;
+}) {
+  return (
+    <TableFrame
+      title="Agent runs"
+      subtitle="Conversation-level agent execution status, model, thread, and errors."
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[920px] text-left text-sm">
+          <thead className="border-b border-[#d9e2dd] bg-[#edf3f0] text-xs text-[#526259]">
+            <tr>
+              <th className="px-5 py-3 font-medium">Status</th>
+              <th className="px-5 py-3 font-medium">Session</th>
+              <th className="px-5 py-3 font-medium">User</th>
+              <th className="px-5 py-3 font-medium">Workspace</th>
+              <th className="px-5 py-3 font-medium">Model</th>
+              <th className="px-5 py-3 font-medium">Created</th>
+              <th className="px-5 py-3 font-medium">Error</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#e4ebe7]">
+            {loading ? (
+              <LoadingRows columns={7} />
+            ) : runs.length === 0 ? (
+              <EmptyRow columns={7} label="No agent runs recorded yet." />
+            ) : (
+              runs.map((run) => (
+                <tr key={run.id} className="hover:bg-[#f7faf8]">
+                  <td className="px-5 py-3.5">
+                    <StatusBadge status={run.status} />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="font-medium">
+                      {run.sessionTitle ?? "Untitled session"}
+                    </div>
+                    <div className="max-w-56 truncate text-xs text-[#64736c]">
+                      {run.threadId}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-[#526259]">
+                    {run.userEmail ?? "—"}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="text-[#526259]">
+                      {run.workspaceName ?? "—"}
+                    </div>
+                    <div className="text-xs text-[#8a9890]">
+                      {run.projectName ?? run.canvasName ?? "—"}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-[#526259]">
+                    {run.model ?? "—"}
+                  </td>
+                  <td className="px-5 py-3.5 text-[#64736c]">
+                    {formatDate(run.createdAt)}
+                  </td>
+                  <td
+                    className="max-w-72 truncate px-5 py-3.5 text-[#a0463f]"
+                    title={run.errorMessage ?? undefined}
+                  >
+                    {run.errorCode ?? "—"}
                   </td>
                 </tr>
               ))
@@ -750,6 +907,254 @@ function AuditTable({
   );
 }
 
+function UserDetailDialog({
+  detail,
+  loading,
+  error,
+  onClose,
+  onAdjust,
+}: {
+  detail: AdminUserDetail | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onAdjust: (user: AdminUser) => void;
+}) {
+  const user = detail?.user;
+
+  return (
+    <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>User detail</DialogTitle>
+          <DialogDescription>
+            {user
+              ? `${user.displayName} · ${user.email}`
+              : "Loading account, workspace, credits, and execution activity."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {user && (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <DetailTile label="Plan">
+              <PlanBadge plan={user.plan} />
+            </DetailTile>
+            <DetailTile label="Balance">
+              <span className="tabular-nums">
+                {user.balance.toLocaleString()}
+              </span>
+            </DetailTile>
+            <DetailTile label="Workspace">
+              <span className="truncate">{user.workspaceName ?? "—"}</span>
+            </DetailTile>
+            <DetailTile label="Access">
+              <span className="inline-flex items-center gap-1">
+                {user.isPlatformAdmin && <ShieldCheck className="size-3.5" />}
+                {user.isPlatformAdmin ? "Platform admin" : "Workspace user"}
+              </span>
+            </DetailTile>
+            <DetailTile label="Registered">
+              {formatDate(user.createdAt)}
+            </DetailTile>
+            <DetailTile label="Last sign-in">
+              {user.lastSignInAt ? formatDate(user.lastSignInAt) : "Never"}
+            </DetailTile>
+            <DetailTile label="User ID">
+              <span className="truncate text-xs">{user.id}</span>
+            </DetailTile>
+            <DetailTile label="Workspace ID">
+              <span className="truncate text-xs">
+                {user.workspaceId ?? "—"}
+              </span>
+            </DetailTile>
+          </div>
+        )}
+
+        {error && (
+          <div
+            className="mt-5 flex items-start gap-3 border border-[#e9bebe] bg-[#fff7f6] p-3 text-sm text-[#8e2f2b]"
+            role="alert"
+          >
+            <BadgeAlert className="mt-0.5 size-4 shrink-0" />
+            <div>{error}</div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="mt-5 flex items-center gap-2 text-sm text-[#64736c]">
+            <Loader2 className="size-4 animate-spin text-[#24855f]" />
+            Loading recent activity
+          </div>
+        )}
+
+        {detail && !loading && (
+          <div className="mt-5 grid gap-4 xl:grid-cols-3">
+            <RecentTransactionsPanel transactions={detail.recentTransactions} />
+            <RecentJobsPanel jobs={detail.recentJobs} />
+            <RecentAgentRunsPanel runs={detail.recentAgentRuns} />
+          </div>
+        )}
+
+        <DialogFooter className="mt-6">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          {user?.workspaceId && (
+            <Button type="button" onClick={() => onAdjust(user)}>
+              <Coins data-icon="inline-start" />
+              Adjust credits
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailTile({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 border border-[#d9e2dd] bg-[#f8fbf9] p-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-[#64736c]">
+        {label}
+      </div>
+      <div className="mt-2 min-w-0 text-sm font-medium text-[#17211e]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DetailPanel({
+  title,
+  emptyLabel,
+  children,
+}: {
+  title: string;
+  emptyLabel: string;
+  children: React.ReactNode[];
+}) {
+  return (
+    <section className="min-w-0 border border-[#d9e2dd]">
+      <div className="border-b border-[#d9e2dd] bg-[#edf3f0] px-4 py-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+      </div>
+      <div className="divide-y divide-[#e4ebe7]">
+        {children.length > 0 ? (
+          children
+        ) : (
+          <div className="px-4 py-8 text-center text-sm text-[#64736c]">
+            {emptyLabel}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RecentTransactionsPanel({
+  transactions,
+}: {
+  transactions: AdminCreditTransaction[];
+}) {
+  return (
+    <DetailPanel title="Credit ledger" emptyLabel="No recent credit activity.">
+      {transactions.map((item) => (
+        <div key={item.id} className="px-4 py-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <span className="capitalize text-[#426457]">
+              {item.transactionType.replace(/_/g, " ")}
+            </span>
+            <span
+              className={`font-semibold tabular-nums ${item.amount >= 0 ? "text-[#16835e]" : "text-[#b44d45]"}`}
+            >
+              {item.amount >= 0 ? "+" : ""}
+              {item.amount.toLocaleString()}
+            </span>
+          </div>
+          <div className="mt-1 truncate text-xs text-[#64736c]">
+            {item.description ?? "No reason recorded"}
+          </div>
+          <div className="mt-1 text-xs text-[#8a9890]">
+            Balance {item.balanceAfter.toLocaleString()} ·{" "}
+            {formatDate(item.createdAt)}
+          </div>
+        </div>
+      ))}
+    </DetailPanel>
+  );
+}
+
+function RecentJobsPanel({ jobs }: { jobs: AdminJob[] }) {
+  return (
+    <DetailPanel
+      title="Generation jobs"
+      emptyLabel="No recent generation jobs."
+    >
+      {jobs.map((job) => (
+        <div key={job.id} className="px-4 py-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <span className="font-medium capitalize">
+              {job.jobType.replace(/_/g, " ")}
+            </span>
+            <StatusBadge status={job.status} />
+          </div>
+          <div className="mt-1 text-xs text-[#64736c]">
+            {formatDate(job.createdAt)}
+          </div>
+          {(job.errorCode || job.errorMessage) && (
+            <div
+              className="mt-1 truncate text-xs text-[#a0463f]"
+              title={job.errorMessage ?? undefined}
+            >
+              {job.errorCode ?? job.errorMessage}
+            </div>
+          )}
+        </div>
+      ))}
+    </DetailPanel>
+  );
+}
+
+function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
+  return (
+    <DetailPanel title="Agent runs" emptyLabel="No recent agent runs.">
+      {runs.map((run) => (
+        <div key={run.id} className="px-4 py-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <span className="min-w-0 truncate font-medium">
+              {run.sessionTitle ?? "Untitled session"}
+            </span>
+            <StatusBadge status={run.status} />
+          </div>
+          <div className="mt-1 truncate text-xs text-[#64736c]">
+            {run.model ?? "No model"} · {run.threadId}
+          </div>
+          <div className="mt-1 text-xs text-[#8a9890]">
+            {formatDate(run.createdAt)}
+            {run.completedAt
+              ? ` · Completed ${formatDate(run.completedAt)}`
+              : ""}
+          </div>
+          {(run.errorCode || run.errorMessage) && (
+            <div
+              className="mt-1 truncate text-xs text-[#a0463f]"
+              title={run.errorMessage ?? undefined}
+            >
+              {run.errorCode ?? run.errorMessage}
+            </div>
+          )}
+        </div>
+      ))}
+    </DetailPanel>
+  );
+}
+
 function PlanBadge({ plan }: { plan: string }) {
   return (
     <span className="inline-flex rounded-full border border-[#cfe1d7] bg-[#f2faf5] px-2 py-0.5 text-xs font-medium capitalize text-[#32634e]">
@@ -759,7 +1164,7 @@ function PlanBadge({ plan }: { plan: string }) {
 }
 function StatusBadge({ status }: { status: string }) {
   const tone =
-    status === "succeeded"
+    status === "succeeded" || status === "completed"
       ? "border-[#b9e2cd] bg-[#edf9f1] text-[#22754e]"
       : status === "failed" || status === "dead_letter"
         ? "border-[#ecc7c4] bg-[#fff4f3] text-[#a8443c]"

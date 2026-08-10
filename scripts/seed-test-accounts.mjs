@@ -21,6 +21,7 @@ const TEST_ACCOUNTS = [
 ];
 
 const ADMIN_DEMO_SOURCE = "scripts/seed-test-accounts.mjs:admin-demo";
+const ADMIN_DEMO_AGENT_THREAD_PREFIX = "admin-demo-agent-run";
 
 async function loadEnv() {
   for (const envFile of [".env.local", ".env"]) {
@@ -179,6 +180,72 @@ async function grantPlatformAdmins(client, seededAccounts) {
   }
 }
 
+async function ensureAdminDemoCanvas(client, account, slugSuffix, projectName) {
+  const projectResult = await client.query(
+    `
+      insert into public.projects (
+        workspace_id,
+        name,
+        slug,
+        description,
+        created_by
+      )
+      values ($1, $2, $3, $4, $5)
+      on conflict (workspace_id, slug) do update
+      set name = excluded.name,
+          description = excluded.description,
+          updated_at = timezone('utc', now())
+      returning id
+    `,
+    [
+      account.workspaceId,
+      projectName,
+      `admin-demo-${slugSuffix}`,
+      "Local admin console demo project.",
+      account.userId,
+    ],
+  );
+
+  const projectId = projectResult.rows[0]?.id;
+  if (!projectId) {
+    throw new Error("Unable to seed admin demo project.");
+  }
+
+  const canvasResult = await client.query(
+    `
+      with existing as (
+        select id
+        from public.canvases
+        where project_id = $1
+          and name = 'Admin Demo Canvas'
+        limit 1
+      ),
+      inserted as (
+        insert into public.canvases (
+          project_id,
+          name,
+          is_primary,
+          created_by
+        )
+        select $1, 'Admin Demo Canvas', true, $2
+        where not exists (select 1 from existing)
+        returning id
+      )
+      select id from inserted
+      union all
+      select id from existing
+      limit 1
+    `,
+    [projectId, account.userId],
+  );
+
+  const canvasId = canvasResult.rows[0]?.id;
+  if (!canvasId) {
+    throw new Error("Unable to seed admin demo canvas.");
+  }
+  return canvasId;
+}
+
 async function seedAdminDemoData(client, seededAccounts) {
   const pro = seededAccounts.get("pro@test.loomic.com");
   const starter = seededAccounts.get("starter@test.loomic.com");
@@ -197,6 +264,10 @@ async function seedAdminDemoData(client, seededAccounts) {
     await client.query(
       "delete from public.background_jobs where payload->>'source' = $1",
       [ADMIN_DEMO_SOURCE],
+    );
+    await client.query(
+      "delete from public.chat_sessions where thread_id like $1",
+      [`${ADMIN_DEMO_AGENT_THREAD_PREFIX}:%`],
     );
     await client.query(
       "delete from public.admin_audit_events where metadata->>'source' = $1",
@@ -286,6 +357,140 @@ async function seedAdminDemoData(client, seededAccounts) {
       ],
     );
 
+    const proCanvasId = await ensureAdminDemoCanvas(
+      client,
+      pro,
+      "pro",
+      "Admin Demo Pro Project",
+    );
+    const starterCanvasId = await ensureAdminDemoCanvas(
+      client,
+      starter,
+      "starter",
+      "Admin Demo Starter Project",
+    );
+    const freeCanvasId = await ensureAdminDemoCanvas(
+      client,
+      free,
+      "free",
+      "Admin Demo Free Project",
+    );
+    const completedThreadId = `${ADMIN_DEMO_AGENT_THREAD_PREFIX}:completed`;
+    const runningThreadId = `${ADMIN_DEMO_AGENT_THREAD_PREFIX}:running`;
+    const failedThreadId = `${ADMIN_DEMO_AGENT_THREAD_PREFIX}:failed`;
+    const sessionsResult = await client.query(
+      `
+        insert into public.chat_sessions (
+          canvas_id,
+          title,
+          created_by,
+          created_at,
+          updated_at,
+          thread_id
+        )
+        values
+          (
+            $1,
+            'Admin demo brand concept',
+            $2,
+            now() - interval '42 minutes',
+            now() - interval '38 minutes',
+            $7
+          ),
+          (
+            $3,
+            'Admin demo active agent run',
+            $4,
+            now() - interval '14 minutes',
+            now() - interval '12 minutes',
+            $8
+          ),
+          (
+            $5,
+            'Admin demo failed prompt',
+            $6,
+            now() - interval '7 minutes',
+            now() - interval '6 minutes',
+            $9
+          )
+        returning id, thread_id
+      `,
+      [
+        proCanvasId,
+        pro.userId,
+        starterCanvasId,
+        starter.userId,
+        freeCanvasId,
+        free.userId,
+        completedThreadId,
+        runningThreadId,
+        failedThreadId,
+      ],
+    );
+    const sessionIds = new Map(
+      sessionsResult.rows.map((row) => [row.thread_id, row.id]),
+    );
+    const completedSessionId = sessionIds.get(completedThreadId);
+    const runningSessionId = sessionIds.get(runningThreadId);
+    const failedSessionId = sessionIds.get(failedThreadId);
+    if (!completedSessionId || !runningSessionId || !failedSessionId) {
+      throw new Error("Unable to seed admin demo agent sessions.");
+    }
+
+    await client.query(
+      `
+        insert into public.agent_runs (
+          session_id,
+          thread_id,
+          status,
+          model,
+          created_at,
+          completed_at,
+          error_code,
+          error_message
+        )
+        values
+          (
+            $1,
+            $2,
+            'completed',
+            'gpt-4.1',
+            now() - interval '41 minutes',
+            now() - interval '38 minutes',
+            null,
+            null
+          ),
+          (
+            $3,
+            $4,
+            'running',
+            'gpt-4.1',
+            now() - interval '12 minutes',
+            null,
+            null,
+            null
+          ),
+          (
+            $5,
+            $6,
+            'failed',
+            'gpt-4.1',
+            now() - interval '6 minutes',
+            now() - interval '5 minutes',
+            'provider_timeout',
+            'Demo agent run timed out while waiting for the model provider.'
+          )
+      `,
+      [
+        completedSessionId,
+        completedThreadId,
+        runningSessionId,
+        runningThreadId,
+        failedSessionId,
+        failedThreadId,
+      ],
+    );
+
     await client.query(
       `
         insert into public.admin_audit_events (
@@ -312,7 +517,7 @@ async function seedAdminDemoData(client, seededAccounts) {
     );
 
     await client.query("commit");
-    console.log("[ready] admin console demo jobs and audit data");
+    console.log("[ready] admin console demo jobs, agent runs, and audit data");
   } catch (error) {
     await client.query("rollback");
     throw error;
