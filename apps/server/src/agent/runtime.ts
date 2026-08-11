@@ -463,6 +463,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           const user: AuthenticatedUser = {
             id: userId,
             accessToken,
+            authVersion: 0,
             email: "",
             userMetadata: {},
           };
@@ -654,6 +655,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           const user: AuthenticatedUser = {
             id: userId,
             accessToken,
+            authVersion: 0,
             email: "",
             userMetadata: {},
           };

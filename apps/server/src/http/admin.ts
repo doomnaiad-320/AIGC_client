@@ -9,6 +9,12 @@ import {
   adminCreditTransactionSchema,
   adminJobSchema,
   adminOverviewSchema,
+  adminPasswordResetRequestSchema,
+  adminPasswordResetResponseSchema,
+  adminPlatformAdminMutationRequestSchema,
+  adminPlatformAdminSchema,
+  adminUpdateUserRequestSchema,
+  adminUpdateUserStatusRequestSchema,
   adminUserDetailSchema,
   adminUserSchema,
   applicationErrorResponseSchema,
@@ -73,6 +79,7 @@ export async function registerAdminRoutes(
       const users = await options.adminService.listUsers({
         ...(query.limit !== undefined ? { limit: query.limit } : {}),
         ...(query.search !== undefined ? { search: query.search } : {}),
+        ...(query.status !== undefined ? { status: query.status } : {}),
       });
       return reply
         .code(200)
@@ -91,6 +98,115 @@ export async function registerAdminRoutes(
       return reply
         .code(200)
         .send({ detail: adminUserDetailSchema.parse(detail) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.patch("/api/admin/users/:userId", async (request, reply) => {
+    try {
+      const actor = await requirePlatformAdmin(request, reply, options);
+      if (!actor) return;
+      const params = userParamsSchema.parse(request.params);
+      const input = adminUpdateUserRequestSchema.parse(request.body);
+      const detail = await options.adminService.updateUser(
+        actor.id,
+        params.userId,
+        input,
+      );
+      return reply
+        .code(200)
+        .send({ detail: adminUserDetailSchema.parse(detail) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/status", async (request, reply) => {
+    try {
+      const actor = await requirePlatformAdmin(request, reply, options);
+      if (!actor) return;
+      const params = userParamsSchema.parse(request.params);
+      const input = adminUpdateUserStatusRequestSchema.parse(request.body);
+      const detail = await options.adminService.updateUserStatus(
+        actor.id,
+        params.userId,
+        input,
+      );
+      return reply
+        .code(200)
+        .send({ detail: adminUserDetailSchema.parse(detail) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.post(
+    "/api/admin/users/:userId/password-reset",
+    async (request, reply) => {
+      try {
+        const actor = await requirePlatformAdmin(request, reply, options);
+        if (!actor) return;
+        const params = userParamsSchema.parse(request.params);
+        const input = adminPasswordResetRequestSchema.parse(request.body);
+        const result = await options.adminService.createPasswordReset(
+          actor.id,
+          params.userId,
+          input,
+        );
+        return reply
+          .code(201)
+          .send(adminPasswordResetResponseSchema.parse(result));
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
+
+  app.get("/api/admin/platform-admins", async (request, reply) => {
+    try {
+      const actor = await requirePlatformAdmin(request, reply, options);
+      if (!actor) return;
+      const administrators = await options.adminService.listPlatformAdmins();
+      return reply.code(200).send({
+        administrators: administrators.map((administrator) =>
+          adminPlatformAdminSchema.parse(administrator),
+        ),
+      });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.put("/api/admin/platform-admins/:userId", async (request, reply) => {
+    try {
+      const actor = await requirePlatformAdmin(request, reply, options);
+      if (!actor) return;
+      const params = userParamsSchema.parse(request.params);
+      const input = adminPlatformAdminMutationRequestSchema.parse(request.body);
+      await options.adminService.grantPlatformAdmin(
+        actor.id,
+        params.userId,
+        input,
+      );
+      return reply.code(204).send();
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.delete("/api/admin/platform-admins/:userId", async (request, reply) => {
+    try {
+      const actor = await requirePlatformAdmin(request, reply, options);
+      if (!actor) return;
+      const params = userParamsSchema.parse(request.params);
+      const input = adminPlatformAdminMutationRequestSchema.parse(request.body);
+      await options.adminService.revokePlatformAdmin(
+        actor.id,
+        params.userId,
+        input,
+      );
+      return reply.code(204).send();
     } catch (error) {
       return sendAdminError(error, reply);
     }
@@ -226,7 +342,7 @@ function sendAdminError(error: unknown, reply: FastifyReply) {
       }),
     );
   }
-  if (error instanceof z.ZodError) {
+  if (error instanceof z.ZodError || isValidationError(error)) {
     return reply
       .code(400)
       .send({ issues: error.issues, message: "Invalid request" });
@@ -238,5 +354,16 @@ function sendAdminError(error: unknown, reply: FastifyReply) {
         message: "Unable to complete admin request.",
       },
     }),
+  );
+}
+
+function isValidationError(
+  error: unknown,
+): error is { issues: Array<Record<string, unknown>> } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "issues" in error &&
+    Array.isArray(error.issues)
   );
 }

@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from "node:crypto";
+
 import type {
   AdminAgentRun,
   AdminAuditEvent,
@@ -6,6 +8,12 @@ import type {
   AdminCreditTransaction,
   AdminJob,
   AdminOverview,
+  AdminPasswordResetRequest,
+  AdminPasswordResetResponse,
+  AdminPlatformAdmin,
+  AdminPlatformAdminMutationRequest,
+  AdminUpdateUserRequest,
+  AdminUpdateUserStatusRequest,
   AdminUser,
   AdminUserDetail,
 } from "@loomic/shared";
@@ -18,6 +26,10 @@ export class PlatformAdminServiceError extends Error {
       | "platform_admin_required"
       | "admin_user_not_found"
       | "admin_query_failed"
+      | "admin_user_update_failed"
+      | "admin_user_status_update_failed"
+      | "admin_password_reset_failed"
+      | "admin_platform_admin_update_failed"
       | "credit_adjustment_failed",
     message: string,
     readonly statusCode: number,
@@ -30,8 +42,38 @@ export class PlatformAdminServiceError extends Error {
 export type PlatformAdminService = {
   isPlatformAdmin(userId: string): Promise<boolean>;
   getOverview(): Promise<AdminOverview>;
-  listUsers(input?: { limit?: number; search?: string }): Promise<AdminUser[]>;
+  listUsers(input?: {
+    limit?: number;
+    search?: string;
+    status?: string;
+  }): Promise<AdminUser[]>;
   getUserDetail(userId: string): Promise<AdminUserDetail>;
+  updateUser(
+    actorUserId: string,
+    userId: string,
+    input: AdminUpdateUserRequest,
+  ): Promise<AdminUserDetail>;
+  updateUserStatus(
+    actorUserId: string,
+    userId: string,
+    input: AdminUpdateUserStatusRequest,
+  ): Promise<AdminUserDetail>;
+  createPasswordReset(
+    actorUserId: string,
+    userId: string,
+    input: AdminPasswordResetRequest,
+  ): Promise<AdminPasswordResetResponse>;
+  listPlatformAdmins(): Promise<AdminPlatformAdmin[]>;
+  grantPlatformAdmin(
+    actorUserId: string,
+    userId: string,
+    input: AdminPlatformAdminMutationRequest,
+  ): Promise<void>;
+  revokePlatformAdmin(
+    actorUserId: string,
+    userId: string,
+    input: AdminPlatformAdminMutationRequest,
+  ): Promise<void>;
   listJobs(input?: {
     limit?: number;
     status?: string;
@@ -62,7 +104,10 @@ const USER_COLUMNS = `
   w.name as "workspaceName",
   coalesce(s.plan::text, 'free') as plan,
   coalesce(cb.balance, 0)::int as balance,
-  (pa.user_id is not null) as "isPlatformAdmin"
+  (pa.user_id is not null) as "isPlatformAdmin",
+  u.status,
+  u.status_reason as "statusReason",
+  u.status_changed_at as "statusChangedAt"
 `;
 
 const USER_JOINS = `
@@ -81,6 +126,7 @@ const USER_JOINS = `
 
 export function createPlatformAdminService(options: {
   getAdminClient: () => AdminDbClient;
+  onUserAuthChanged?: (userId: string) => void;
 }): PlatformAdminService {
   const getAdmin = options.getAdminClient;
 
@@ -114,6 +160,7 @@ export function createPlatformAdminService(options: {
 
     async listUsers(input = {}) {
       const search = input.search?.trim() || null;
+      const status = input.status?.trim() || null;
       const limit = clampLimit(input.limit, 50);
       const { data, error } = await getAdmin().query<AdminUser>(
         `
@@ -125,10 +172,11 @@ export function createPlatformAdminService(options: {
             or u.email ilike '%' || $1 || '%'
             or coalesce(p.display_name, '') ilike '%' || $1 || '%'
           )
+            and ($2::text is null or u.status = $2)
           order by u.created_at desc
-          limit $2::int
+          limit $3::int
         `,
-        [search, limit],
+        [search, status, limit],
       );
       return getMany(data, error, "Unable to load users.");
     },
@@ -173,6 +221,355 @@ export function createPlatformAdminService(options: {
         ]);
 
       return { recentAgentRuns, recentJobs, recentTransactions, user };
+    },
+
+    async updateUser(actorUserId, userId, input) {
+      const email = input.email?.trim().toLowerCase() ?? null;
+      const displayName = input.displayName?.trim() ?? null;
+      const { data, error } = await getAdmin().query<{ id: string }>(
+        `
+          with target as materialized (
+            select
+              u.id,
+              u.email,
+              coalesce(p.display_name, split_part(u.email, '@', 1)) as display_name
+            from public.app_users u
+            left join public.profiles p on p.id = u.id
+            where u.id = $2::uuid
+            for update of u
+          ),
+          updated_user as (
+            update public.app_users u
+            set email = coalesce($3::text, u.email),
+                user_metadata = case
+                  when $4::text is null then u.user_metadata
+                  else jsonb_set(
+                    coalesce(u.user_metadata, '{}'::jsonb),
+                    '{display_name}',
+                    to_jsonb($4::text),
+                    true
+                  )
+                end,
+                auth_version = case
+                  when $3::text is not null and $3::text is distinct from u.email
+                    then u.auth_version + 1
+                  else u.auth_version
+                end,
+                updated_at = now()
+            from target t
+            where u.id = t.id
+            returning u.id, u.email
+          ),
+          synced_profile as (
+            insert into public.profiles (id, email, display_name)
+            select
+              u.id,
+              u.email,
+              coalesce($4::text, t.display_name)
+            from updated_user u
+            join target t on t.id = u.id
+            on conflict (id) do update
+            set email = excluded.email,
+                display_name = excluded.display_name,
+                updated_at = now()
+            returning id, email, display_name
+          ),
+          audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'user.profile_updated',
+              t.id,
+              jsonb_build_object(
+                'email_before', t.email,
+                'email_after', p.email,
+                'display_name_before', t.display_name,
+                'display_name_after', p.display_name,
+                'reason', $5::text
+              )
+            from target t
+            join synced_profile p on p.id = t.id
+          )
+          select id from synced_profile
+        `,
+        [actorUserId, userId, email, displayName, input.reason],
+      );
+      if (error) {
+        const duplicateEmail = error.code === "23505";
+        throw new PlatformAdminServiceError(
+          "admin_user_update_failed",
+          duplicateEmail
+            ? "This email address is already in use."
+            : "Unable to update the user.",
+          duplicateEmail ? 409 : 500,
+        );
+      }
+      if (!data?.[0]) throw userNotFound();
+      if (email) options.onUserAuthChanged?.(userId);
+      return service.getUserDetail(userId);
+    },
+
+    async updateUserStatus(actorUserId, userId, input) {
+      if (actorUserId === userId && input.status !== "active") {
+        throw new PlatformAdminServiceError(
+          "admin_user_status_update_failed",
+          "You cannot suspend or disable your own account.",
+          400,
+        );
+      }
+
+      const { data, error } = await getAdmin().query<{ id: string }>(
+        `
+          with target as materialized (
+            select id, status, status_reason
+            from public.app_users
+            where id = $2::uuid
+            for update
+          ),
+          updated as (
+            update public.app_users u
+            set status = $3::text,
+                status_reason = $4::text,
+                status_changed_at = now(),
+                status_changed_by = $1::uuid,
+                auth_version = u.auth_version + 1,
+                updated_at = now()
+            from target t
+            where u.id = t.id
+            returning u.id, u.status, u.status_reason, u.auth_version
+          ),
+          audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'user.status_updated',
+              t.id,
+              jsonb_build_object(
+                'status_before', t.status,
+                'status_after', u.status,
+                'reason_before', t.status_reason,
+                'reason', u.status_reason,
+                'auth_version_after', u.auth_version
+              )
+            from target t
+            join updated u on u.id = t.id
+          )
+          select id from updated
+        `,
+        [actorUserId, userId, input.status, input.reason],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_user_status_update_failed",
+          "Unable to update the user status.",
+          500,
+        );
+      }
+      if (!data?.[0]) throw userNotFound();
+      options.onUserAuthChanged?.(userId);
+      return service.getUserDetail(userId);
+    },
+
+    async createPasswordReset(actorUserId, userId, input) {
+      const resetToken = randomBytes(32).toString("base64url");
+      const tokenHash = createHash("sha256").update(resetToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const { data, error } = await getAdmin().query<{ id: string }>(
+        `
+          with target as materialized (
+            select id
+            from public.app_users
+            where id = $2::uuid
+          ),
+          revoked as (
+            update public.admin_password_reset_tokens
+            set revoked_at = now()
+            where user_id = $2::uuid
+              and used_at is null
+              and revoked_at is null
+          ),
+          issued as (
+            insert into public.admin_password_reset_tokens (
+              user_id,
+              token_hash,
+              created_by,
+              reason,
+              expires_at
+            )
+            select id, $3::text, $1::uuid, $4::text, $5::timestamptz
+            from target
+            returning id, user_id
+          ),
+          audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'user.password_reset_issued',
+              user_id,
+              jsonb_build_object(
+                'expires_at', $5::timestamptz,
+                'reason', $4::text,
+                'reset_token_id', id
+              )
+            from issued
+          )
+          select id from issued
+        `,
+        [actorUserId, userId, tokenHash, input.reason, expiresAt],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_password_reset_failed",
+          "Unable to create a password reset.",
+          500,
+        );
+      }
+      if (!data?.[0]) throw userNotFound();
+      return { expiresAt, resetToken };
+    },
+
+    async listPlatformAdmins() {
+      const { data, error } = await getAdmin().query<AdminPlatformAdmin>(`
+        select
+          pa.user_id as "userId",
+          u.email,
+          coalesce(p.display_name, split_part(u.email, '@', 1)) as "displayName",
+          pa.created_at as "createdAt",
+          creator.email as "createdByEmail",
+          pa.note
+        from public.platform_admins pa
+        join public.app_users u on u.id = pa.user_id
+        left join public.profiles p on p.id = pa.user_id
+        left join public.app_users creator on creator.id = pa.created_by
+        order by pa.created_at asc
+      `);
+      return getMany(data, error, "Unable to load platform administrators.");
+    },
+
+    async grantPlatformAdmin(actorUserId, userId, input) {
+      const { data, error } = await getAdmin().query<{ userId: string }>(
+        `
+          with target as materialized (
+            select id
+            from public.app_users
+            where id = $2::uuid
+              and status = 'active'
+          ),
+          granted as (
+            insert into public.platform_admins (user_id, created_by, note)
+            select id, $1::uuid, $3::text
+            from target
+            on conflict (user_id) do update
+            set note = excluded.note
+            returning user_id
+          ),
+          audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'platform_admin.granted',
+              user_id,
+              jsonb_build_object('reason', $3::text)
+            from granted
+          )
+          select user_id as "userId" from granted
+        `,
+        [actorUserId, userId, input.reason],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_platform_admin_update_failed",
+          "Unable to grant platform administrator access.",
+          500,
+        );
+      }
+      if (!data?.[0]) {
+        throw new PlatformAdminServiceError(
+          "admin_platform_admin_update_failed",
+          "Only an active user can become a platform administrator.",
+          400,
+        );
+      }
+    },
+
+    async revokePlatformAdmin(actorUserId, userId, input) {
+      if (actorUserId === userId) {
+        throw new PlatformAdminServiceError(
+          "admin_platform_admin_update_failed",
+          "You cannot revoke your own platform administrator access.",
+          400,
+        );
+      }
+
+      const { data, error } = await getAdmin().query<{ userId: string }>(
+        `
+          with guard as materialized (
+            select pg_advisory_xact_lock(
+              hashtext('loomic_platform_admin_membership')
+            )
+          ),
+          admin_count as materialized (
+            select count(*)::int as value
+            from public.platform_admins, guard
+          ),
+          revoked as (
+            delete from public.platform_admins
+            where user_id = $2::uuid
+              and (select value from admin_count) > 1
+            returning user_id
+          ),
+          audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'platform_admin.revoked',
+              user_id,
+              jsonb_build_object('reason', $3::text)
+            from revoked
+          )
+          select user_id as "userId" from revoked
+        `,
+        [actorUserId, userId, input.reason],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_platform_admin_update_failed",
+          "Unable to revoke platform administrator access.",
+          500,
+        );
+      }
+      if (!data?.[0]) {
+        throw new PlatformAdminServiceError(
+          "admin_platform_admin_update_failed",
+          "The administrator was not found or is the last platform administrator.",
+          400,
+        );
+      }
     },
 
     async listJobs(input = {}) {
@@ -335,6 +732,14 @@ export function createPlatformAdminService(options: {
 
 function clampLimit(value: number | undefined, fallback: number) {
   return Math.min(Math.max(value ?? fallback, 1), 100);
+}
+
+function userNotFound() {
+  return new PlatformAdminServiceError(
+    "admin_user_not_found",
+    "User was not found.",
+    404,
+  );
 }
 
 function getOne<T>(

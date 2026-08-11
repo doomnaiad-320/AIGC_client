@@ -5,6 +5,9 @@ import type { ZodType } from "zod";
 
 import {
   type Database,
+  adminPasswordResetRequestSchema,
+  adminUpdateUserRequestSchema,
+  adminUpdateUserStatusRequestSchema,
   errorCodeValues,
   healthResponseSchema,
   runCancelResponseSchema,
@@ -64,7 +67,7 @@ describe("@loomic/shared contracts", () => {
       ],
     });
     expect(result.attachments).toHaveLength(1);
-    expect(result.attachments![0].assetId).toBe("asset-123");
+    expect(result.attachments?.[0].assetId).toBe("asset-123");
   });
 
   it("accepts optional image generation preference in run creation", () => {
@@ -74,10 +77,7 @@ describe("@loomic/shared contracts", () => {
       prompt: "Generate a campaign key visual",
       imageGenerationPreference: {
         mode: "manual",
-        models: [
-          "google/nano-banana-2",
-          "black-forest-labs/flux-kontext-pro",
-        ],
+        models: ["google/nano-banana-2", "black-forest-labs/flux-kontext-pro"],
       },
     });
 
@@ -512,6 +512,39 @@ describe("@loomic/shared contracts", () => {
     expect(databaseTypeSource).toMatch(/agent_runs:\s*{/);
     expect(databaseTypeSource).toMatch(/session_id:\s*string/);
     expect(databaseTypeSource).toMatch(/thread_id:\s*string/);
+  });
+
+  it("requires reasons for sensitive admin user mutations", () => {
+    expect(
+      adminUpdateUserStatusRequestSchema.safeParse({
+        reason: "",
+        status: "suspended",
+      }).success,
+    ).toBe(false);
+    expect(
+      adminPasswordResetRequestSchema.safeParse({ reason: "" }).success,
+    ).toBe(false);
+    expect(
+      adminUpdateUserRequestSchema.safeParse({
+        displayName: "Updated name",
+        reason: "Support request verification",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts only supported administrator user statuses", () => {
+    expect(
+      adminUpdateUserStatusRequestSchema.safeParse({
+        reason: "Policy review",
+        status: "disabled",
+      }).success,
+    ).toBe(true);
+    expect(
+      adminUpdateUserStatusRequestSchema.safeParse({
+        reason: "Policy review",
+        status: "blocked",
+      }).success,
+    ).toBe(false);
   });
 
   it("tracks official langgraph persistence schema typings", () => {

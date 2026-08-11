@@ -1,12 +1,18 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "node:crypto";
 import { promisify } from "node:util";
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import {
-  createAccessToken,
   type RequestAuthenticator,
+  createAccessToken,
+  invalidateAuthCacheForUser,
 } from "../auth/user.js";
 import type { ServerEnv } from "../config/env.js";
 import type { AdminDbClient } from "../db/client.js";
@@ -29,10 +35,17 @@ const changePasswordRequestSchema = z
     path: ["newPassword"],
   });
 
+const completePasswordResetRequestSchema = z.object({
+  newPassword: z.string().min(8).max(256),
+  resetToken: z.string().min(32).max(256),
+});
+
 type AppUserRow = {
+  auth_version: number;
   id: string;
   email: string;
   password_hash: string;
+  status: "active" | "suspended" | "disabled";
   user_metadata: Record<string, unknown> | null;
 };
 
@@ -48,7 +61,10 @@ export async function registerAuthRoutes(
     const parsed = authRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
-        error: { code: "invalid_auth_request", message: "Invalid email or password." },
+        error: {
+          code: "invalid_auth_request",
+          message: "Invalid email or password.",
+        },
       });
     }
 
@@ -65,7 +81,7 @@ export async function registerAuthRoutes(
         password_hash: await hashPassword(parsed.data.password),
         user_metadata: userMetadata,
       })
-      .select("id, email, password_hash, user_metadata")
+      .select("id, email, password_hash, user_metadata, status, auth_version")
       .single();
 
     if (error || !data) {
@@ -87,6 +103,7 @@ export async function registerAuthRoutes(
     });
 
     const session = await createAccessToken(options.env, {
+      authVersion: data.auth_version,
       email: data.email,
       id: data.id,
       userMetadata,
@@ -101,7 +118,10 @@ export async function registerAuthRoutes(
       .safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
-        error: { code: "invalid_auth_request", message: "Invalid email or password." },
+        error: {
+          code: "invalid_auth_request",
+          message: "Invalid email or password.",
+        },
       });
     }
 
@@ -109,13 +129,28 @@ export async function registerAuthRoutes(
     const admin = options.getAdminClient();
     const { data, error } = await admin
       .from<AppUserRow>("app_users")
-      .select("id, email, password_hash, user_metadata")
+      .select("id, email, password_hash, user_metadata, status, auth_version")
       .eq("email", email)
       .maybeSingle();
 
-    if (error || !data || !(await verifyPassword(parsed.data.password, data.password_hash))) {
+    if (
+      error ||
+      !data ||
+      !(await verifyPassword(parsed.data.password, data.password_hash))
+    ) {
       return reply.code(401).send({
-        error: { code: "invalid_credentials", message: "Invalid email or password." },
+        error: {
+          code: "invalid_credentials",
+          message: "Invalid email or password.",
+        },
+      });
+    }
+    if (data.status !== "active") {
+      return reply.code(403).send({
+        error: {
+          code: "account_unavailable",
+          message: "This account is not currently available.",
+        },
       });
     }
 
@@ -132,6 +167,7 @@ export async function registerAuthRoutes(
     });
 
     const session = await createAccessToken(options.env, {
+      authVersion: data.auth_version,
       email: data.email,
       id: data.id,
       userMetadata,
@@ -144,7 +180,10 @@ export async function registerAuthRoutes(
     const user = await options.auth.authenticate(request);
     if (!user) {
       return reply.code(401).send({
-        error: { code: "unauthorized", message: "Missing or invalid bearer token." },
+        error: {
+          code: "unauthorized",
+          message: "Missing or invalid bearer token.",
+        },
       });
     }
 
@@ -153,7 +192,8 @@ export async function registerAuthRoutes(
       return reply.code(400).send({
         error: {
           code: "invalid_password_change_request",
-          message: "Enter a valid current password and a different new password.",
+          message:
+            "Enter a valid current password and a different new password.",
         },
       });
     }
@@ -174,7 +214,9 @@ export async function registerAuthRoutes(
       });
     }
 
-    if (!(await verifyPassword(parsed.data.currentPassword, data.password_hash))) {
+    if (
+      !(await verifyPassword(parsed.data.currentPassword, data.password_hash))
+    ) {
       return reply.code(400).send({
         error: {
           code: "invalid_current_password",
@@ -183,10 +225,16 @@ export async function registerAuthRoutes(
       });
     }
 
-    const { error: updateError } = await admin
-      .from("app_users")
-      .update({ password_hash: await hashPassword(parsed.data.newPassword) })
-      .eq("id", user.id);
+    const { error: updateError } = await admin.query(
+      `
+        update public.app_users
+        set password_hash = $2::text,
+            auth_version = auth_version + 1,
+            updated_at = now()
+        where id = $1::uuid
+      `,
+      [user.id, await hashPassword(parsed.data.newPassword)],
+    );
 
     if (updateError) {
       return reply.code(500).send({
@@ -197,6 +245,74 @@ export async function registerAuthRoutes(
       });
     }
 
+    invalidateAuthCacheForUser(user.id);
+
+    return reply.code(204).send();
+  });
+
+  app.post("/api/auth/password-reset", async (request, reply) => {
+    const parsed = completePasswordResetRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: "invalid_password_reset_request",
+          message: "Enter a valid reset token and new password.",
+        },
+      });
+    }
+
+    const tokenHash = createHash("sha256")
+      .update(parsed.data.resetToken)
+      .digest("hex");
+    const passwordHash = await hashPassword(parsed.data.newPassword);
+    const { data, error } = await options.getAdminClient().query<{
+      userId: string;
+    }>(
+      `
+        with valid_token as materialized (
+          select id, user_id
+          from public.admin_password_reset_tokens
+          where token_hash = $1::text
+            and used_at is null
+            and revoked_at is null
+            and expires_at > now()
+          for update
+        ),
+        updated_user as (
+          update public.app_users u
+          set password_hash = $2::text,
+              auth_version = u.auth_version + 1,
+              updated_at = now()
+          from valid_token t
+          where u.id = t.user_id
+          returning u.id
+        ),
+        consumed_token as (
+          update public.admin_password_reset_tokens token
+          set used_at = now()
+          from valid_token t
+          where token.id = t.id
+            and exists (
+              select 1 from updated_user u where u.id = t.user_id
+            )
+          returning token.user_id
+        )
+        select user_id as "userId" from consumed_token
+      `,
+      [tokenHash, passwordHash],
+    );
+
+    const userId = data?.[0]?.userId;
+    if (error || !userId) {
+      return reply.code(400).send({
+        error: {
+          code: "invalid_or_expired_password_reset",
+          message: "The password reset token is invalid or has expired.",
+        },
+      });
+    }
+
+    invalidateAuthCacheForUser(userId);
     return reply.code(204).send();
   });
 }
@@ -208,7 +324,7 @@ function normalizeEmail(email: string) {
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("base64url");
   const derived = (await scrypt(password, salt, 64)) as Buffer;
-  return "scrypt$" + salt + "$" + derived.toString("base64url");
+  return `scrypt$${salt}$${derived.toString("base64url")}`;
 }
 
 export async function verifyPassword(password: string, storedHash: string) {

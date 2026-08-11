@@ -102,6 +102,7 @@ import { registerLocalStorageRoutes } from "./db/storage.js";
 import {
   createRequestAuthenticator,
   createUserDbClientFactory,
+  invalidateAuthCacheForUser,
   type RequestAuthenticator,
 } from "./auth/user.js";
 
@@ -155,7 +156,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       viewerService,
     });
   });
-  const auth = options.auth ?? createRequestAuthenticator(env);
   const createUserClient = createUserDbClientFactory(env);
   let adminClient:
     | ReturnType<typeof createAdminDbClient>
@@ -164,6 +164,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     adminClient ??= createAdminDbClient(env);
     return adminClient;
   };
+  const auth =
+    options.auth ?? createRequestAuthenticator(env, { getAdminClient });
   const viewerService =
     options.viewerService ?? createViewerService({ getAdminClient });
   const projectService =
@@ -202,7 +204,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const creditService =
     options.creditService ?? createCreditService({ getAdminClient });
   const adminService =
-    options.adminService ?? createPlatformAdminService({ getAdminClient });
+    options.adminService ??
+    createPlatformAdminService({
+      getAdminClient,
+      onUserAuthChanged: invalidateAuthCacheForUser,
+    });
   const tierGuard =
     options.tierGuard ?? createTierGuard({ getAdminClient });
 

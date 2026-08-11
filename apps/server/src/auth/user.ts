@@ -1,13 +1,15 @@
 import type { FastifyRequest } from "fastify";
-import { jwtVerify, SignJWT } from "jose";
+import { SignJWT, jwtVerify } from "jose";
 
 import type { ServerEnv } from "../config/env.js";
+import type { AdminDbClient } from "../db/client.js";
 
 export { createUserDbClientFactory } from "../db/client.js";
 export type { UserDbClient } from "../db/client.js";
 
 export type AuthenticatedUser = {
   accessToken: string;
+  authVersion: number;
   email: string;
   id: string;
   userMetadata: Record<string, unknown>;
@@ -21,10 +23,14 @@ export type RequestAuthenticator = {
 
 const AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_DEV_SECRET = "loomic-local-dev-secret-change-me";
-const tokenCache = new Map<string, { expiresAt: number; user: AuthenticatedUser }>();
+const tokenCache = new Map<
+  string,
+  { expiresAt: number; user: AuthenticatedUser }
+>();
 
 export function createRequestAuthenticator(
   env: Pick<ServerEnv, "appJwtSecret">,
+  options: { getAdminClient: () => AdminDbClient },
 ): RequestAuthenticator {
   const secret = getJwtSecret(env);
 
@@ -41,12 +47,40 @@ export function createRequestAuthenticator(
           audience: "authenticated",
         });
         const id = payload.sub;
-        const email = typeof payload.email === "string" ? payload.email : null;
-        if (!id || !email) return null;
+        const tokenEmail =
+          typeof payload.email === "string" ? payload.email : null;
+        const tokenAuthVersion =
+          typeof payload.auth_version === "number" &&
+          Number.isInteger(payload.auth_version) &&
+          payload.auth_version >= 0
+            ? payload.auth_version
+            : 0;
+        if (!id || !tokenEmail) return null;
+
+        const { data: account, error } = await options
+          .getAdminClient()
+          .from<{
+            auth_version: number;
+            email: string;
+            id: string;
+            status: string;
+          }>("app_users")
+          .select("id, email, status, auth_version")
+          .eq("id", id)
+          .maybeSingle();
+        if (
+          error ||
+          !account ||
+          account.status !== "active" ||
+          account.auth_version !== tokenAuthVersion
+        ) {
+          return null;
+        }
 
         const user: AuthenticatedUser = {
           accessToken,
-          email,
+          authVersion: account.auth_version,
+          email: account.email,
           id,
           userMetadata: isRecord(payload.user_metadata)
             ? (payload.user_metadata as Record<string, unknown>)
@@ -69,6 +103,7 @@ export async function createAccessToken(
   const expiresAt = now + 60 * 60 * 24 * 30;
   const token = await new SignJWT({
     aud: "authenticated",
+    auth_version: user.authVersion,
     email: user.email,
     user_metadata: user.userMetadata,
   })
@@ -88,6 +123,12 @@ export async function createAccessToken(
       user_metadata: user.userMetadata,
     },
   };
+}
+
+export function invalidateAuthCacheForUser(userId: string) {
+  for (const [token, cached] of tokenCache) {
+    if (cached.user.id === userId) tokenCache.delete(token);
+  }
 }
 
 function getJwtSecret(env: Pick<ServerEnv, "appJwtSecret">) {

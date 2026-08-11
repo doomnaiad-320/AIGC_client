@@ -7,6 +7,13 @@ const nullableTimestampSchema = z
   .datetime({ offset: true })
   .nullable();
 
+export const adminUserStatusSchema = z.enum([
+  "active",
+  "suspended",
+  "disabled",
+]);
+export type AdminUserStatus = z.infer<typeof adminUserStatusSchema>;
+
 export const adminOverviewSchema = z.object({
   totalUsers: z.number().int().nonnegative(),
   activeJobs: z.number().int().nonnegative(),
@@ -26,8 +33,65 @@ export const adminUserSchema = z.object({
   plan: subscriptionPlanSchema,
   balance: z.number().int().nonnegative(),
   isPlatformAdmin: z.boolean(),
+  status: adminUserStatusSchema,
+  statusReason: z.string().nullable(),
+  statusChangedAt: nullableTimestampSchema,
 });
 export type AdminUser = z.infer<typeof adminUserSchema>;
+
+export const adminUpdateUserRequestSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80).optional(),
+    email: z.string().trim().email().optional(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .refine(
+    (value) => value.displayName !== undefined || value.email !== undefined,
+    { message: "Provide an email or display name." },
+  );
+export type AdminUpdateUserRequest = z.infer<
+  typeof adminUpdateUserRequestSchema
+>;
+
+export const adminUpdateUserStatusRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+  status: adminUserStatusSchema,
+});
+export type AdminUpdateUserStatusRequest = z.infer<
+  typeof adminUpdateUserStatusRequestSchema
+>;
+
+export const adminPasswordResetRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminPasswordResetRequest = z.infer<
+  typeof adminPasswordResetRequestSchema
+>;
+
+export const adminPasswordResetResponseSchema = z.object({
+  expiresAt: z.string().datetime({ offset: true }),
+  resetToken: z.string().min(32),
+});
+export type AdminPasswordResetResponse = z.infer<
+  typeof adminPasswordResetResponseSchema
+>;
+
+export const adminPlatformAdminSchema = z.object({
+  createdAt: z.string().datetime({ offset: true }),
+  createdByEmail: z.string().email().nullable(),
+  displayName: z.string(),
+  email: z.string().email(),
+  note: z.string(),
+  userId: z.string().uuid(),
+});
+export type AdminPlatformAdmin = z.infer<typeof adminPlatformAdminSchema>;
+
+export const adminPlatformAdminMutationRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminPlatformAdminMutationRequest = z.infer<
+  typeof adminPlatformAdminMutationRequestSchema
+>;
 
 export const adminJobSchema = z.object({
   id: z.string().uuid(),
