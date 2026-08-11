@@ -14,6 +14,20 @@ export const adminUserStatusSchema = z.enum([
 ]);
 export type AdminUserStatus = z.infer<typeof adminUserStatusSchema>;
 
+export const adminWorkspaceMembershipSchema = z.object({
+  workspaceId: z.string().uuid(),
+  workspaceName: z.string(),
+  workspaceType: z.enum(["personal", "team"]),
+  role: z.enum(["owner", "admin", "member"]),
+  joinedAt: z.string().datetime({ offset: true }),
+  plan: subscriptionPlanSchema,
+  balance: z.number().int().nonnegative(),
+  isOwner: z.boolean(),
+});
+export type AdminWorkspaceMembership = z.infer<
+  typeof adminWorkspaceMembershipSchema
+>;
+
 export const adminOverviewSchema = z.object({
   totalUsers: z.number().int().nonnegative(),
   activeJobs: z.number().int().nonnegative(),
@@ -156,6 +170,7 @@ export type AdminAuditEvent = z.infer<typeof adminAuditEventSchema>;
 
 export const adminUserDetailSchema = z.object({
   user: adminUserSchema,
+  workspaces: z.array(adminWorkspaceMembershipSchema),
   recentTransactions: z.array(adminCreditTransactionSchema),
   recentJobs: z.array(adminJobSchema),
   recentAgentRuns: z.array(adminAgentRunSchema),

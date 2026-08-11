@@ -18,6 +18,7 @@ function makeService(isAdmin: boolean): PlatformAdminService {
     recentAgentRuns: [],
     recentJobs: [],
     recentTransactions: [],
+    workspaces: [],
     user: {
       balance: 100,
       createdAt: "2026-08-10T00:00:00.000Z",
@@ -44,6 +45,7 @@ function makeService(isAdmin: boolean): PlatformAdminService {
     }),
     listUsers: vi.fn().mockResolvedValue([]),
     getUserDetail: vi.fn().mockResolvedValue(userDetail),
+    listUserWorkspaces: vi.fn().mockResolvedValue([]),
     updateUser: vi.fn().mockResolvedValue(userDetail),
     updateUserStatus: vi.fn().mockResolvedValue(userDetail),
     createPasswordReset: vi.fn().mockResolvedValue({

@@ -266,6 +266,7 @@ export default function AdminPage() {
       recentJobs: [],
       recentTransactions: [],
       user,
+      workspaces: [],
     });
     try {
       const { detail } = await fetchAdminUserDetail(token, user.id);
@@ -1951,6 +1952,7 @@ function UserDetailDialog({
 
           {detail && !loading && (
             <div className="mt-6 space-y-6">
+              <UserWorkspacesPanel workspaces={detail.workspaces} />
               <RecentTransactionsPanel
                 transactions={detail.recentTransactions}
               />
@@ -2014,6 +2016,77 @@ function UserDetailDialog({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function UserWorkspacesPanel({
+  workspaces,
+}: {
+  workspaces: AdminUserDetail["workspaces"];
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Workspaces</h3>
+          <p className="text-xs text-muted-foreground">
+            Every workspace this user can access, including their role and
+            balance.
+          </p>
+        </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {workspaces.length}
+        </span>
+      </div>
+      {workspaces.length === 0 ? (
+        <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
+          No workspace memberships found.
+        </div>
+      ) : (
+        <div className="divide-y rounded-md border">
+          {workspaces.map((workspace) => (
+            <div
+              key={workspace.workspaceId}
+              className="flex items-center justify-between gap-4 px-3 py-3"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{workspace.workspaceName}</span>
+                  {workspace.isOwner && (
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Owner
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="capitalize">{workspace.workspaceType}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="capitalize">{workspace.role}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Joined {formatDate(workspace.joinedAt)}</span>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-end gap-3 text-right">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Plan
+                  </div>
+                  <PlanBadge plan={workspace.plan} />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Balance
+                  </div>
+                  <div className="mt-1 text-sm font-medium tabular-nums">
+                    {workspace.balance.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -16,6 +16,7 @@ import type {
   AdminUpdateUserStatusRequest,
   AdminUser,
   AdminUserDetail,
+  AdminWorkspaceMembership,
 } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
@@ -48,6 +49,7 @@ export type PlatformAdminService = {
     status?: string;
   }): Promise<AdminUser[]>;
   getUserDetail(userId: string): Promise<AdminUserDetail>;
+  listUserWorkspaces(userId: string): Promise<AdminWorkspaceMembership[]>;
   updateUser(
     actorUserId: string,
     userId: string,
@@ -208,8 +210,9 @@ export function createPlatformAdminService(options: {
         );
       }
 
-      const [recentTransactions, recentJobs, recentAgentRuns] =
+      const [workspaces, recentTransactions, recentJobs, recentAgentRuns] =
         await Promise.all([
+          service.listUserWorkspaces(userId),
           user.workspaceId
             ? service.listTransactions({
                 limit: 20,
@@ -220,7 +223,37 @@ export function createPlatformAdminService(options: {
           service.listAgentRuns({ limit: 20, userId }),
         ]);
 
-      return { recentAgentRuns, recentJobs, recentTransactions, user };
+      return {
+        recentAgentRuns,
+        recentJobs,
+        recentTransactions,
+        user,
+        workspaces,
+      };
+    },
+
+    async listUserWorkspaces(userId) {
+      const { data, error } = await getAdmin().query<AdminWorkspaceMembership>(
+        `
+          select
+            w.id as "workspaceId",
+            w.name as "workspaceName",
+            w.type::text as "workspaceType",
+            wm.role::text as role,
+            wm.created_at as "joinedAt",
+            coalesce(s.plan::text, 'free') as plan,
+            coalesce(cb.balance, 0)::int as balance,
+            (w.owner_user_id = wm.user_id) as "isOwner"
+          from public.workspace_members wm
+          join public.workspaces w on w.id = wm.workspace_id
+          left join public.subscriptions s on s.workspace_id = w.id
+          left join public.credit_balances cb on cb.workspace_id = w.id
+          where wm.user_id = $1::uuid
+          order by w.created_at asc, w.id asc
+        `,
+        [userId],
+      );
+      return getMany(data, error, "Unable to load user workspaces.");
     },
 
     async updateUser(actorUserId, userId, input) {
