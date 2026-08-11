@@ -17,6 +17,8 @@ import {
   adminUpdateUserStatusRequestSchema,
   adminUserDetailSchema,
   adminUserSchema,
+  adminWorkspaceDetailSchema,
+  adminWorkspaceSchema,
   applicationErrorResponseSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
@@ -35,6 +37,16 @@ const listQuerySchema = z.object({
 
 const userParamsSchema = z.object({
   userId: z.string().uuid(),
+});
+
+const workspaceListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: z.string().trim().max(120).optional(),
+  type: z.enum(["personal", "team"]).optional(),
+});
+
+const workspaceParamsSchema = z.object({
+  workspaceId: z.string().uuid(),
 });
 
 export async function registerAdminRoutes(
@@ -98,6 +110,42 @@ export async function registerAdminRoutes(
       return reply
         .code(200)
         .send({ detail: adminUserDetailSchema.parse(detail) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.get("/api/admin/workspaces", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const query = workspaceListQuerySchema.parse(request.query);
+      const workspaces = await options.adminService.listWorkspaces({
+        ...(query.limit !== undefined ? { limit: query.limit } : {}),
+        ...(query.search !== undefined ? { search: query.search } : {}),
+        ...(query.type !== undefined ? { type: query.type } : {}),
+      });
+      return reply.code(200).send({
+        workspaces: workspaces.map((workspace) =>
+          adminWorkspaceSchema.parse(workspace),
+        ),
+      });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.get("/api/admin/workspaces/:workspaceId", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const params = workspaceParamsSchema.parse(request.params);
+      const detail = await options.adminService.getWorkspaceDetail(
+        params.workspaceId,
+      );
+      return reply
+        .code(200)
+        .send({ detail: adminWorkspaceDetailSchema.parse(detail) });
     } catch (error) {
       return sendAdminError(error, reply);
     }

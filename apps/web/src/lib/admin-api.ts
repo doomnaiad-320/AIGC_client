@@ -14,6 +14,8 @@ import type {
   AdminUpdateUserStatusRequest,
   AdminUser,
   AdminUserDetail,
+  AdminWorkspace,
+  AdminWorkspaceDetail,
 } from "@loomic/shared";
 
 import { getServerBaseUrl } from "./env";
@@ -63,6 +65,23 @@ export function fetchAdminUserDetail(accessToken: string, userId: string) {
   return get<{ detail: AdminUserDetail }>(
     accessToken,
     `/api/admin/users/${userId}`,
+  );
+}
+
+export function fetchAdminWorkspaces(accessToken: string) {
+  return get<{ workspaces: AdminWorkspace[] }>(
+    accessToken,
+    "/api/admin/workspaces?limit=100",
+  );
+}
+
+export function fetchAdminWorkspaceDetail(
+  accessToken: string,
+  workspaceId: string,
+) {
+  return get<{ detail: AdminWorkspaceDetail }>(
+    accessToken,
+    `/api/admin/workspaces/${workspaceId}`,
   );
 }
 

@@ -16,7 +16,11 @@ import type {
   AdminUpdateUserStatusRequest,
   AdminUser,
   AdminUserDetail,
+  AdminWorkspace,
+  AdminWorkspaceDetail,
+  AdminWorkspaceMember,
   AdminWorkspaceMembership,
+  AdminWorkspaceProject,
 } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
@@ -26,6 +30,7 @@ export class PlatformAdminServiceError extends Error {
     readonly code:
       | "platform_admin_required"
       | "admin_user_not_found"
+      | "admin_workspace_not_found"
       | "admin_query_failed"
       | "admin_user_update_failed"
       | "admin_user_status_update_failed"
@@ -50,6 +55,12 @@ export type PlatformAdminService = {
   }): Promise<AdminUser[]>;
   getUserDetail(userId: string): Promise<AdminUserDetail>;
   listUserWorkspaces(userId: string): Promise<AdminWorkspaceMembership[]>;
+  listWorkspaces(input?: {
+    limit?: number;
+    search?: string;
+    type?: string;
+  }): Promise<AdminWorkspace[]>;
+  getWorkspaceDetail(workspaceId: string): Promise<AdminWorkspaceDetail>;
   updateUser(
     actorUserId: string,
     userId: string,
@@ -124,6 +135,37 @@ const USER_JOINS = `
   left join public.subscriptions s on s.workspace_id = w.id
   left join public.credit_balances cb on cb.workspace_id = w.id
   left join public.platform_admins pa on pa.user_id = u.id
+`;
+
+const WORKSPACE_COLUMNS = `
+  w.id,
+  w.name,
+  w.type::text as type,
+  w.created_at as "createdAt",
+  w.owner_user_id as "ownerUserId",
+  owner.email as "ownerEmail",
+  coalesce(owner_profile.display_name, split_part(owner.email, '@', 1)) as "ownerDisplayName",
+  coalesce(member_stats.member_count, 0)::int as "memberCount",
+  coalesce(project_stats.project_count, 0)::int as "projectCount",
+  coalesce(s.plan::text, 'free') as plan,
+  coalesce(cb.balance, 0)::int as balance
+`;
+
+const WORKSPACE_JOINS = `
+  join public.app_users owner on owner.id = w.owner_user_id
+  left join public.profiles owner_profile on owner_profile.id = owner.id
+  left join public.subscriptions s on s.workspace_id = w.id
+  left join public.credit_balances cb on cb.workspace_id = w.id
+  left join lateral (
+    select count(*)::int as member_count
+    from public.workspace_members wm
+    where wm.workspace_id = w.id
+  ) member_stats on true
+  left join lateral (
+    select count(*)::int as project_count
+    from public.projects p
+    where p.workspace_id = w.id
+  ) project_stats on true
 `;
 
 export function createPlatformAdminService(options: {
@@ -254,6 +296,113 @@ export function createPlatformAdminService(options: {
         [userId],
       );
       return getMany(data, error, "Unable to load user workspaces.");
+    },
+
+    async listWorkspaces(input = {}) {
+      const search = input.search?.trim() || null;
+      const type = input.type?.trim() || null;
+      const limit = clampLimit(input.limit, 50);
+      const { data, error } = await getAdmin().query<AdminWorkspace>(
+        `
+          select ${WORKSPACE_COLUMNS}
+          from public.workspaces w
+          ${WORKSPACE_JOINS}
+          where (
+            $1::text is null
+            or w.name ilike '%' || $1 || '%'
+            or owner.email ilike '%' || $1 || '%'
+            or coalesce(owner_profile.display_name, '') ilike '%' || $1 || '%'
+          )
+            and ($2::text is null or w.type::text = $2)
+          order by w.created_at desc, w.id asc
+          limit $3::int
+        `,
+        [search, type, limit],
+      );
+      return getMany(data, error, "Unable to load workspaces.");
+    },
+
+    async getWorkspaceDetail(workspaceId) {
+      const { data, error } = await getAdmin().query<AdminWorkspace>(
+        `
+          select ${WORKSPACE_COLUMNS}
+          from public.workspaces w
+          ${WORKSPACE_JOINS}
+          where w.id = $1::uuid
+          limit 1
+        `,
+        [workspaceId],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load workspace detail.",
+          500,
+        );
+      }
+      const workspace = data?.[0];
+      if (!workspace) {
+        throw new PlatformAdminServiceError(
+          "admin_workspace_not_found",
+          "Workspace was not found.",
+          404,
+        );
+      }
+
+      const [membersResult, projectsResult] = await Promise.all([
+        getAdmin().query<AdminWorkspaceMember>(
+          `
+            select
+              wm.user_id as "userId",
+              u.email,
+              coalesce(p.display_name, split_part(u.email, '@', 1)) as "displayName",
+              wm.role::text as role,
+              wm.created_at as "joinedAt",
+              u.status
+            from public.workspace_members wm
+            join public.app_users u on u.id = wm.user_id
+            left join public.profiles p on p.id = wm.user_id
+            where wm.workspace_id = $1::uuid
+            order by
+              case wm.role when 'owner' then 0 when 'admin' then 1 else 2 end,
+              wm.created_at asc,
+              wm.user_id asc
+          `,
+          [workspaceId],
+        ),
+        getAdmin().query<AdminWorkspaceProject>(
+          `
+            select
+              p.id,
+              p.name,
+              p.slug,
+              p.created_at as "createdAt",
+              coalesce(canvas_stats.canvas_count, 0)::int as "canvasCount"
+            from public.projects p
+            left join lateral (
+              select count(*)::int as canvas_count
+              from public.canvases c
+              where c.project_id = p.id
+            ) canvas_stats on true
+            where p.workspace_id = $1::uuid
+            order by p.created_at desc, p.id asc
+            limit 100
+          `,
+          [workspaceId],
+        ),
+      ]);
+
+      const members = getMany(
+        membersResult.data,
+        membersResult.error,
+        "Unable to load workspace members.",
+      );
+      const projects = getMany(
+        projectsResult.data,
+        projectsResult.error,
+        "Unable to load workspace projects.",
+      );
+      return { members, projects, workspace };
     },
 
     async updateUser(actorUserId, userId, input) {

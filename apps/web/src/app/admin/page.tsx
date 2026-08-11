@@ -10,12 +10,15 @@ import type {
   AdminUser,
   AdminUserDetail,
   AdminUserStatus,
+  AdminWorkspace,
+  AdminWorkspaceDetail,
 } from "@loomic/shared";
 import {
   Activity,
   ArrowLeft,
   BadgeAlert,
   Bot,
+  Building2,
   Check,
   CircleDollarSign,
   ClipboardList,
@@ -69,6 +72,8 @@ import {
   fetchAdminTransactions,
   fetchAdminUserDetail,
   fetchAdminUsers,
+  fetchAdminWorkspaceDetail,
+  fetchAdminWorkspaces,
   fetchPlatformAdmins,
   grantPlatformAdmin,
   issueAdminPasswordReset,
@@ -81,6 +86,7 @@ import { cn } from "@/lib/utils";
 
 type AdminTab =
   | "users"
+  | "workspaces"
   | "jobs"
   | "agent-runs"
   | "ledger"
@@ -98,6 +104,13 @@ const tabs: Array<{
     label: "Users",
     description: "Manage accounts, workspace access, plans, and balances.",
     icon: Users,
+  },
+  {
+    id: "workspaces",
+    label: "Workspaces",
+    description:
+      "Review workspace ownership, members, projects, plans, and balances.",
+    icon: Building2,
   },
   {
     id: "jobs",
@@ -141,6 +154,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<AdminTab>("users");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [workspaces, setWorkspaces] = useState<AdminWorkspace[]>([]);
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [agentRuns, setAgentRuns] = useState<AdminAgentRun[]>([]);
   const [transactions, setTransactions] = useState<AdminCreditTransaction[]>(
@@ -166,6 +180,12 @@ export default function AdminPage() {
     useState<AdminUserDetail | null>(null);
   const [loadingUserDetail, setLoadingUserDetail] = useState(false);
   const [userDetailError, setUserDetailError] = useState<string | null>(null);
+  const [selectedWorkspaceDetail, setSelectedWorkspaceDetail] =
+    useState<AdminWorkspaceDetail | null>(null);
+  const [loadingWorkspaceDetail, setLoadingWorkspaceDetail] = useState(false);
+  const [workspaceDetailError, setWorkspaceDetailError] = useState<
+    string | null
+  >(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -207,6 +227,7 @@ export default function AdminPage() {
       const [
         overviewData,
         usersData,
+        workspacesData,
         jobsData,
         agentRunData,
         transactionData,
@@ -219,6 +240,7 @@ export default function AdminPage() {
           searchValue,
           statusValue === "all" ? "" : statusValue,
         ),
+        fetchAdminWorkspaces(token),
         fetchAdminJobs(token),
         fetchAdminAgentRuns(token),
         fetchAdminTransactions(token),
@@ -227,6 +249,7 @@ export default function AdminPage() {
       ]);
       setOverview(overviewData.overview);
       setUsers(usersData.users);
+      setWorkspaces(workspacesData.workspaces);
       setJobs(jobsData.jobs);
       setAgentRuns(agentRunData.runs);
       setTransactions(transactionData.transactions);
@@ -279,6 +302,26 @@ export default function AdminPage() {
       );
     } finally {
       setLoadingUserDetail(false);
+    }
+  }
+
+  async function openWorkspaceDetail(workspace: AdminWorkspace) {
+    const token = tokenRef.current;
+    if (!token) return;
+    setLoadingWorkspaceDetail(true);
+    setWorkspaceDetailError(null);
+    setSelectedWorkspaceDetail({ members: [], projects: [], workspace });
+    try {
+      const { detail } = await fetchAdminWorkspaceDetail(token, workspace.id);
+      setSelectedWorkspaceDetail(detail);
+    } catch (detailError) {
+      setWorkspaceDetailError(
+        detailError instanceof Error
+          ? detailError.message
+          : "Unable to load workspace detail.",
+      );
+    } finally {
+      setLoadingWorkspaceDetail(false);
     }
   }
 
@@ -690,6 +733,13 @@ export default function AdminPage() {
                 onAdmin={openPlatformAdminMutation}
               />
             )}
+            {tab === "workspaces" && (
+              <WorkspacesTable
+                workspaces={workspaces}
+                loading={loadingData}
+                onView={(workspace) => void openWorkspaceDetail(workspace)}
+              />
+            )}
             {tab === "jobs" && <JobsTable jobs={jobs} loading={loadingData} />}
             {tab === "agent-runs" && (
               <AgentRunsTable runs={agentRuns} loading={loadingData} />
@@ -880,6 +930,16 @@ export default function AdminPage() {
         onStatus={openStatusUser}
         onReset={openResetUser}
         onAdmin={openPlatformAdminMutation}
+      />
+
+      <WorkspaceDetailDialog
+        detail={selectedWorkspaceDetail}
+        error={workspaceDetailError}
+        loading={loadingWorkspaceDetail}
+        onClose={() => {
+          setSelectedWorkspaceDetail(null);
+          setWorkspaceDetailError(null);
+        }}
       />
     </div>
   );
@@ -1142,6 +1202,92 @@ function UsersTable({
         </table>
       </div>
     </>
+  );
+}
+
+function WorkspacesTable({
+  workspaces,
+  loading,
+  onView,
+}: {
+  workspaces: AdminWorkspace[];
+  loading: boolean;
+  onView: (workspace: AdminWorkspace) => void;
+}) {
+  return (
+    <TableFrame
+      title="All workspaces"
+      subtitle="Ownership, membership, projects, subscriptions, and balances."
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-5 py-3 font-medium">Workspace</th>
+              <th className="px-5 py-3 font-medium">Owner</th>
+              <th className="px-5 py-3 font-medium">Type</th>
+              <th className="px-5 py-3 font-medium">Members</th>
+              <th className="px-5 py-3 font-medium">Projects</th>
+              <th className="px-5 py-3 font-medium">Plan</th>
+              <th className="px-5 py-3 font-medium">Balance</th>
+              <th className="px-5 py-3 text-right font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loading ? (
+              <LoadingRows columns={8} />
+            ) : workspaces.length === 0 ? (
+              <EmptyRow columns={8} label="No workspaces found." />
+            ) : (
+              workspaces.map((workspace) => (
+                <tr key={workspace.id} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
+                    <div className="font-medium">{workspace.name}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      Created {formatDate(workspace.createdAt)}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="font-medium">
+                      {workspace.ownerDisplayName}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {workspace.ownerEmail}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 capitalize text-muted-foreground">
+                    {workspace.type}
+                  </td>
+                  <td className="px-5 py-3 tabular-nums">
+                    {workspace.memberCount}
+                  </td>
+                  <td className="px-5 py-3 tabular-nums">
+                    {workspace.projectCount}
+                  </td>
+                  <td className="px-5 py-3">
+                    <PlanBadge plan={workspace.plan} />
+                  </td>
+                  <td className="px-5 py-3 font-medium tabular-nums">
+                    {workspace.balance.toLocaleString()}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onView(workspace)}
+                    >
+                      <Eye data-icon="inline-start" />
+                      View
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </TableFrame>
   );
 }
 
@@ -2087,6 +2233,161 @@ function UserWorkspacesPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function WorkspaceDetailDialog({
+  detail,
+  loading,
+  error,
+  onClose,
+}: {
+  detail: AdminWorkspaceDetail | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const workspace = detail?.workspace;
+
+  return (
+    <Sheet open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="sm:max-w-2xl">
+        <SheetHeader>
+          <SheetTitle>Workspace details</SheetTitle>
+          <SheetDescription>
+            {workspace
+              ? `${workspace.name} · ${workspace.ownerEmail}`
+              : "Loading ownership, membership, projects, plan, and balance."}
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody>
+          {workspace && (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-b pb-6">
+              <DetailTile label="Type">
+                <span className="capitalize">{workspace.type}</span>
+              </DetailTile>
+              <DetailTile label="Plan">
+                <PlanBadge plan={workspace.plan} />
+              </DetailTile>
+              <DetailTile label="Owner">
+                <span className="truncate">{workspace.ownerDisplayName}</span>
+              </DetailTile>
+              <DetailTile label="Balance">
+                <span className="tabular-nums">
+                  {workspace.balance.toLocaleString()}
+                </span>
+              </DetailTile>
+              <DetailTile label="Members">{workspace.memberCount}</DetailTile>
+              <DetailTile label="Projects">{workspace.projectCount}</DetailTile>
+              <DetailTile label="Created">
+                {formatDate(workspace.createdAt)}
+              </DetailTile>
+              <DetailTile label="Workspace ID">
+                <span className="truncate text-xs">{workspace.id}</span>
+              </DetailTile>
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="mt-5 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              role="alert"
+            >
+              <BadgeAlert className="mt-0.5 size-4 shrink-0" />
+              <div>{error}</div>
+            </div>
+          )}
+
+          {loading && (
+            <div
+              className="mt-6 space-y-3"
+              aria-label="Loading workspace detail"
+            >
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+            </div>
+          )}
+
+          {detail && !loading && (
+            <div className="mt-6 space-y-6">
+              <section className="space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Members</h3>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {detail.members.length}
+                  </span>
+                </div>
+                {detail.members.length === 0 ? (
+                  <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
+                    No members found.
+                  </div>
+                ) : (
+                  <div className="divide-y rounded-md border">
+                    {detail.members.map((member) => (
+                      <div
+                        key={member.userId}
+                        className="flex items-center justify-between gap-4 px-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {member.displayName}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {member.email}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <UserStatusBadge status={member.status} />
+                          <span className="rounded bg-muted px-2 py-1 text-xs font-medium capitalize">
+                            {member.role}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold">Projects</h3>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {detail.projects.length}
+                  </span>
+                </div>
+                {detail.projects.length === 0 ? (
+                  <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
+                    No projects found.
+                  </div>
+                ) : (
+                  <div className="divide-y rounded-md border">
+                    {detail.projects.map((project) => (
+                      <div
+                        key={project.id}
+                        className="flex items-center justify-between gap-4 px-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {project.name}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {project.slug} · {formatDate(project.createdAt)}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-xs text-muted-foreground">
+                          {project.canvasCount}{" "}
+                          {project.canvasCount === 1 ? "canvas" : "canvases"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 

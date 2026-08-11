@@ -14,6 +14,19 @@ const adminUser = {
 };
 
 function makeService(isAdmin: boolean): PlatformAdminService {
+  const workspace = {
+    balance: 100,
+    createdAt: "2026-08-10T00:00:00.000Z",
+    id: "33333333-3333-4333-8333-333333333333",
+    memberCount: 1,
+    name: "Operator Workspace",
+    ownerDisplayName: "Operator",
+    ownerEmail: "operator@example.com",
+    ownerUserId: "11111111-1111-4111-8111-111111111111",
+    plan: "pro" as const,
+    projectCount: 2,
+    type: "personal" as const,
+  };
   const userDetail = {
     recentAgentRuns: [],
     recentJobs: [],
@@ -46,6 +59,12 @@ function makeService(isAdmin: boolean): PlatformAdminService {
     listUsers: vi.fn().mockResolvedValue([]),
     getUserDetail: vi.fn().mockResolvedValue(userDetail),
     listUserWorkspaces: vi.fn().mockResolvedValue([]),
+    listWorkspaces: vi.fn().mockResolvedValue([workspace]),
+    getWorkspaceDetail: vi.fn().mockResolvedValue({
+      members: [],
+      projects: [],
+      workspace,
+    }),
     updateUser: vi.fn().mockResolvedValue(userDetail),
     updateUserStatus: vi.fn().mockResolvedValue(userDetail),
     createPasswordReset: vi.fn().mockResolvedValue({
@@ -136,6 +155,20 @@ describe("admin routes", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().detail.user.email).toBe("operator@example.com");
+    await app.close();
+  });
+
+  it("returns workspace detail to a platform admin", async () => {
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      makeService(true),
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/workspaces/33333333-3333-4333-8333-333333333333",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().detail.workspace.name).toBe("Operator Workspace");
     await app.close();
   });
 

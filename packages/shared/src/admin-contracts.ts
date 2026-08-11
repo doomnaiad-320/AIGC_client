@@ -28,6 +28,47 @@ export type AdminWorkspaceMembership = z.infer<
   typeof adminWorkspaceMembershipSchema
 >;
 
+export const adminWorkspaceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  type: z.enum(["personal", "team"]),
+  createdAt: z.string().datetime({ offset: true }),
+  ownerUserId: z.string().uuid(),
+  ownerEmail: z.string().email(),
+  ownerDisplayName: z.string(),
+  memberCount: z.number().int().nonnegative(),
+  projectCount: z.number().int().nonnegative(),
+  plan: subscriptionPlanSchema,
+  balance: z.number().int().nonnegative(),
+});
+export type AdminWorkspace = z.infer<typeof adminWorkspaceSchema>;
+
+export const adminWorkspaceMemberSchema = z.object({
+  userId: z.string().uuid(),
+  email: z.string().email(),
+  displayName: z.string(),
+  role: z.enum(["owner", "admin", "member"]),
+  joinedAt: z.string().datetime({ offset: true }),
+  status: adminUserStatusSchema,
+});
+export type AdminWorkspaceMember = z.infer<typeof adminWorkspaceMemberSchema>;
+
+export const adminWorkspaceProjectSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  createdAt: z.string().datetime({ offset: true }),
+  canvasCount: z.number().int().nonnegative(),
+});
+export type AdminWorkspaceProject = z.infer<typeof adminWorkspaceProjectSchema>;
+
+export const adminWorkspaceDetailSchema = z.object({
+  workspace: adminWorkspaceSchema,
+  members: z.array(adminWorkspaceMemberSchema),
+  projects: z.array(adminWorkspaceProjectSchema),
+});
+export type AdminWorkspaceDetail = z.infer<typeof adminWorkspaceDetailSchema>;
+
 export const adminOverviewSchema = z.object({
   totalUsers: z.number().int().nonnegative(),
   activeJobs: z.number().int().nonnegative(),
