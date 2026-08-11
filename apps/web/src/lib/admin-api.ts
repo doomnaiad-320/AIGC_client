@@ -6,6 +6,12 @@ import type {
   AdminCreditTransaction,
   AdminJob,
   AdminOverview,
+  AdminPasswordResetRequest,
+  AdminPasswordResetResponse,
+  AdminPlatformAdmin,
+  AdminPlatformAdminMutationRequest,
+  AdminUpdateUserRequest,
+  AdminUpdateUserStatusRequest,
   AdminUser,
   AdminUserDetail,
 } from "@loomic/shared";
@@ -46,9 +52,10 @@ export function fetchAdminOverview(accessToken: string) {
   return get<{ overview: AdminOverview }>(accessToken, "/api/admin/overview");
 }
 
-export function fetchAdminUsers(accessToken: string, search = "") {
+export function fetchAdminUsers(accessToken: string, search = "", status = "") {
   const query = new URLSearchParams({ limit: "100" });
   if (search.trim()) query.set("search", search.trim());
+  if (status.trim()) query.set("status", status.trim());
   return get<{ users: AdminUser[] }>(accessToken, `/api/admin/users?${query}`);
 }
 
@@ -81,6 +88,94 @@ export function fetchAdminAuditEvents(accessToken: string) {
   return get<{ events: AdminAuditEvent[] }>(
     accessToken,
     "/api/admin/audit-events?limit=100",
+  );
+}
+
+async function mutate<T>(
+  accessToken: string,
+  path: string,
+  method: "PATCH" | "POST" | "PUT" | "DELETE",
+  body: unknown,
+) {
+  const response = await fetch(`${getServerBaseUrl()}${path}`, {
+    method,
+    headers: jsonHeaders(accessToken),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return handleError(response);
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+export function updateAdminUser(
+  accessToken: string,
+  userId: string,
+  input: AdminUpdateUserRequest,
+) {
+  return mutate<{ detail: AdminUserDetail }>(
+    accessToken,
+    `/api/admin/users/${userId}`,
+    "PATCH",
+    input,
+  );
+}
+
+export function updateAdminUserStatus(
+  accessToken: string,
+  userId: string,
+  input: AdminUpdateUserStatusRequest,
+) {
+  return mutate<{ detail: AdminUserDetail }>(
+    accessToken,
+    `/api/admin/users/${userId}/status`,
+    "PATCH",
+    input,
+  );
+}
+
+export function issueAdminPasswordReset(
+  accessToken: string,
+  userId: string,
+  input: AdminPasswordResetRequest,
+) {
+  return mutate<AdminPasswordResetResponse>(
+    accessToken,
+    `/api/admin/users/${userId}/password-reset`,
+    "POST",
+    input,
+  );
+}
+
+export function fetchPlatformAdmins(accessToken: string) {
+  return get<{ administrators: AdminPlatformAdmin[] }>(
+    accessToken,
+    "/api/admin/platform-admins",
+  );
+}
+
+export function grantPlatformAdmin(
+  accessToken: string,
+  userId: string,
+  input: AdminPlatformAdminMutationRequest,
+) {
+  return mutate<void>(
+    accessToken,
+    `/api/admin/platform-admins/${userId}`,
+    "PUT",
+    input,
+  );
+}
+
+export function revokePlatformAdmin(
+  accessToken: string,
+  userId: string,
+  input: AdminPlatformAdminMutationRequest,
+) {
+  return mutate<void>(
+    accessToken,
+    `/api/admin/platform-admins/${userId}`,
+    "DELETE",
+    input,
   );
 }
 

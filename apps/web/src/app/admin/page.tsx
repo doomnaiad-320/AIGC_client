@@ -6,25 +6,34 @@ import type {
   AdminCreditTransaction,
   AdminJob,
   AdminOverview,
+  AdminPasswordResetResponse,
   AdminUser,
   AdminUserDetail,
+  AdminUserStatus,
 } from "@loomic/shared";
 import {
   Activity,
   ArrowLeft,
   BadgeAlert,
   Bot,
+  Check,
   CircleDollarSign,
   ClipboardList,
   Coins,
+  Copy,
   Database,
   Eye,
+  KeyRound,
   Loader2,
+  PauseCircle,
+  Pencil,
   RefreshCw,
   Search,
   ShieldCheck,
+  ShieldOff,
   Users,
   Workflow,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,11 +69,23 @@ import {
   fetchAdminTransactions,
   fetchAdminUserDetail,
   fetchAdminUsers,
+  fetchPlatformAdmins,
+  grantPlatformAdmin,
+  issueAdminPasswordReset,
+  revokePlatformAdmin,
+  updateAdminUser,
+  updateAdminUserStatus,
 } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "users" | "jobs" | "agent-runs" | "ledger" | "audit";
+type AdminTab =
+  | "users"
+  | "jobs"
+  | "agent-runs"
+  | "ledger"
+  | "audit"
+  | "platform-admins";
 
 const tabs: Array<{
   id: AdminTab;
@@ -102,6 +123,13 @@ const tabs: Array<{
     description: "Track sensitive administrator actions and their targets.",
     icon: ClipboardList,
   },
+  {
+    id: "platform-admins",
+    label: "Administrators",
+    description:
+      "Manage platform-level access separately from workspace roles.",
+    icon: ShieldCheck,
+  },
 ];
 
 export default function AdminPage() {
@@ -119,7 +147,13 @@ export default function AdminPage() {
     [],
   );
   const [events, setEvents] = useState<AdminAuditEvent[]>([]);
+  const [platformAdmins, setPlatformAdmins] = useState<
+    Awaited<ReturnType<typeof fetchPlatformAdmins>>["administrators"]
+  >([]);
   const [search, setSearch] = useState("");
+  const [userStatusFilter, setUserStatusFilter] = useState<
+    AdminUserStatus | "all"
+  >("all");
   const [loadingData, setLoadingData] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,8 +166,32 @@ export default function AdminPage() {
     useState<AdminUserDetail | null>(null);
   const [loadingUserDetail, setLoadingUserDetail] = useState(false);
   const [userDetailError, setUserDetailError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editReason, setEditReason] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [statusUser, setStatusUser] = useState<AdminUser | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [resetUser, setResetUser] = useState<AdminUser | null>(null);
+  const [resetReason, setResetReason] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [savingReset, setSavingReset] = useState(false);
+  const [resetResult, setResetResult] =
+    useState<AdminPasswordResetResponse | null>(null);
+  const [adminMutationUser, setAdminMutationUser] = useState<AdminUser | null>(
+    null,
+  );
+  const [adminMutationReason, setAdminMutationReason] = useState("");
+  const [adminMutationError, setAdminMutationError] = useState<string | null>(
+    null,
+  );
+  const [savingAdminMutation, setSavingAdminMutation] = useState(false);
 
-  const load = useCallback(async (searchValue = "") => {
+  const load = useCallback(async (searchValue = "", statusValue = "all") => {
     const token = tokenRef.current;
     if (!token) return;
 
@@ -153,13 +211,19 @@ export default function AdminPage() {
         agentRunData,
         transactionData,
         eventData,
+        platformAdminData,
       ] = await Promise.all([
         fetchAdminOverview(token),
-        fetchAdminUsers(token, searchValue),
+        fetchAdminUsers(
+          token,
+          searchValue,
+          statusValue === "all" ? "" : statusValue,
+        ),
         fetchAdminJobs(token),
         fetchAdminAgentRuns(token),
         fetchAdminTransactions(token),
         fetchAdminAuditEvents(token),
+        fetchPlatformAdmins(token),
       ]);
       setOverview(overviewData.overview);
       setUsers(usersData.users);
@@ -167,6 +231,7 @@ export default function AdminPage() {
       setAgentRuns(agentRunData.runs);
       setTransactions(transactionData.transactions);
       setEvents(eventData.events);
+      setPlatformAdmins(platformAdminData.administrators);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -186,10 +251,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (session?.access_token) void load(search);
+      if (session?.access_token) void load(search, userStatusFilter);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [load, search, session?.access_token]);
+  }, [load, search, session?.access_token, userStatusFilter]);
 
   async function openUserDetail(user: AdminUser) {
     const token = tokenRef.current;
@@ -213,6 +278,191 @@ export default function AdminPage() {
       );
     } finally {
       setLoadingUserDetail(false);
+    }
+  }
+
+  function openEditUser(user: AdminUser) {
+    setEditingUser(user);
+    setEditDisplayName(user.displayName);
+    setEditEmail(user.email);
+    setEditReason("");
+    setEditError(null);
+  }
+
+  function closeEditUser() {
+    setEditingUser(null);
+    setEditDisplayName("");
+    setEditEmail("");
+    setEditReason("");
+    setEditError(null);
+  }
+
+  async function submitEditUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = tokenRef.current;
+    const target = editingUser;
+    if (!token || !target) return;
+    if (editReason.trim().length < 3) {
+      setEditError("Add a reason for this profile change.");
+      return;
+    }
+    if (!editDisplayName.trim() && !editEmail.trim()) {
+      setEditError("Enter a display name or email address.");
+      return;
+    }
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const result = await updateAdminUser(token, target.id, {
+        ...(editDisplayName.trim()
+          ? { displayName: editDisplayName.trim() }
+          : {}),
+        ...(editEmail.trim() ? { email: editEmail.trim() } : {}),
+        reason: editReason.trim(),
+      });
+      setSelectedUserDetail(result.detail);
+      closeEditUser();
+      await load(search, userStatusFilter);
+    } catch (saveError) {
+      setEditError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to update this user.",
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  function openStatusUser(user: AdminUser) {
+    setStatusUser(user);
+    setStatusReason("");
+    setStatusError(null);
+  }
+
+  function closeStatusUser() {
+    setStatusUser(null);
+    setStatusReason("");
+    setStatusError(null);
+  }
+
+  async function submitUserStatus(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = tokenRef.current;
+    const target = statusUser;
+    if (!token || !target) return;
+    if (statusReason.trim().length < 3) {
+      setStatusError("Add a reason for this status change.");
+      return;
+    }
+    setSavingStatus(true);
+    setStatusError(null);
+    try {
+      const result = await updateAdminUserStatus(token, target.id, {
+        reason: statusReason.trim(),
+        status: target.status === "active" ? "suspended" : "active",
+      });
+      setSelectedUserDetail(result.detail);
+      closeStatusUser();
+      await load(search, userStatusFilter);
+    } catch (saveError) {
+      setStatusError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to update this user status.",
+      );
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  function openResetUser(user: AdminUser) {
+    setResetUser(user);
+    setResetReason("");
+    setResetError(null);
+  }
+
+  function closeResetUser() {
+    setResetUser(null);
+    setResetReason("");
+    setResetError(null);
+  }
+
+  async function submitPasswordReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = tokenRef.current;
+    const target = resetUser;
+    if (!token || !target) return;
+    if (resetReason.trim().length < 3) {
+      setResetError("Add a reason for issuing this reset.");
+      return;
+    }
+    setSavingReset(true);
+    setResetError(null);
+    try {
+      const result = await issueAdminPasswordReset(token, target.id, {
+        reason: resetReason.trim(),
+      });
+      closeResetUser();
+      setResetResult(result);
+      await load(search, userStatusFilter);
+    } catch (saveError) {
+      setResetError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to issue a password reset.",
+      );
+    } finally {
+      setSavingReset(false);
+    }
+  }
+
+  function openPlatformAdminMutation(user: AdminUser) {
+    setAdminMutationUser(user);
+    setAdminMutationReason("");
+    setAdminMutationError(null);
+  }
+
+  function closePlatformAdminMutation() {
+    setAdminMutationUser(null);
+    setAdminMutationReason("");
+    setAdminMutationError(null);
+  }
+
+  async function submitPlatformAdminMutation(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    const token = tokenRef.current;
+    const target = adminMutationUser;
+    if (!token || !target) return;
+    if (adminMutationReason.trim().length < 3) {
+      setAdminMutationError("Add a reason for this access change.");
+      return;
+    }
+    setSavingAdminMutation(true);
+    setAdminMutationError(null);
+    try {
+      const input = { reason: adminMutationReason.trim() };
+      if (target.isPlatformAdmin) {
+        await revokePlatformAdmin(token, target.id, input);
+      } else {
+        await grantPlatformAdmin(token, target.id, input);
+      }
+      closePlatformAdminMutation();
+      await load(search, userStatusFilter);
+      if (selectedUserDetail?.user.id === target.id) {
+        const { detail } = await fetchAdminUserDetail(token, target.id);
+        setSelectedUserDetail(detail);
+      }
+    } catch (saveError) {
+      setAdminMutationError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to update platform access.",
+      );
+    } finally {
+      setSavingAdminMutation(false);
     }
   }
 
@@ -250,7 +500,7 @@ export default function AdminPage() {
         reason: adjustmentReason.trim(),
       });
       closeAdjustmentDialog();
-      await load(search);
+      await load(search, userStatusFilter);
       if (selectedUserDetail?.user.id === adjustedUser.id) {
         const { detail } = await fetchAdminUserDetail(token, adjustedUser.id);
         setSelectedUserDetail(detail);
@@ -345,7 +595,7 @@ export default function AdminPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void load(search)}
+                onClick={() => void load(search, userStatusFilter)}
                 disabled={loadingData}
               >
                 <RefreshCw
@@ -426,11 +676,17 @@ export default function AdminPage() {
                 loading={loadingData}
                 search={search}
                 onSearchChange={setSearch}
+                statusFilter={userStatusFilter}
+                onStatusFilterChange={setUserStatusFilter}
                 onView={(user) => void openUserDetail(user)}
                 onAdjust={(user) => {
                   setAdjustmentError(null);
                   setAdjustingUser(user);
                 }}
+                onEdit={openEditUser}
+                onStatus={openStatusUser}
+                onReset={openResetUser}
+                onAdmin={openPlatformAdminMutation}
               />
             )}
             {tab === "jobs" && <JobsTable jobs={jobs} loading={loadingData} />}
@@ -442,6 +698,34 @@ export default function AdminPage() {
             )}
             {tab === "audit" && (
               <AuditTable events={events} loading={loadingData} />
+            )}
+            {tab === "platform-admins" && (
+              <PlatformAdminsTable
+                administrators={platformAdmins}
+                loading={loadingData}
+                onRevoke={(administrator) => {
+                  const user = users.find(
+                    (item) => item.id === administrator.userId,
+                  );
+                  openPlatformAdminMutation(
+                    user ?? {
+                      balance: 0,
+                      createdAt: administrator.createdAt,
+                      displayName: administrator.displayName,
+                      email: administrator.email,
+                      id: administrator.userId,
+                      isPlatformAdmin: true,
+                      lastSignInAt: null,
+                      plan: "free",
+                      status: "active",
+                      statusChangedAt: null,
+                      statusReason: null,
+                      workspaceId: null,
+                      workspaceName: null,
+                    },
+                  );
+                }}
+              />
             )}
           </section>
         </main>
@@ -530,6 +814,55 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
+      <EditUserDialog
+        user={editingUser}
+        displayName={editDisplayName}
+        email={editEmail}
+        reason={editReason}
+        error={editError}
+        saving={savingEdit}
+        onDisplayNameChange={setEditDisplayName}
+        onEmailChange={setEditEmail}
+        onReasonChange={setEditReason}
+        onClose={closeEditUser}
+        onSubmit={submitEditUser}
+      />
+
+      <UserStatusDialog
+        user={statusUser}
+        reason={statusReason}
+        error={statusError}
+        saving={savingStatus}
+        onReasonChange={setStatusReason}
+        onClose={closeStatusUser}
+        onSubmit={submitUserStatus}
+      />
+
+      <PasswordResetDialog
+        user={resetUser}
+        reason={resetReason}
+        error={resetError}
+        saving={savingReset}
+        onReasonChange={setResetReason}
+        onClose={closeResetUser}
+        onSubmit={submitPasswordReset}
+      />
+
+      <PasswordResetResultDialog
+        result={resetResult}
+        onClose={() => setResetResult(null)}
+      />
+
+      <PlatformAdminDialog
+        user={adminMutationUser}
+        reason={adminMutationReason}
+        error={adminMutationError}
+        saving={savingAdminMutation}
+        onReasonChange={setAdminMutationReason}
+        onClose={closePlatformAdminMutation}
+        onSubmit={submitPlatformAdminMutation}
+      />
+
       <UserDetailDialog
         detail={selectedUserDetail}
         error={userDetailError}
@@ -542,6 +875,10 @@ export default function AdminPage() {
           setAdjustmentError(null);
           setAdjustingUser(user);
         }}
+        onEdit={openEditUser}
+        onStatus={openStatusUser}
+        onReset={openResetUser}
+        onAdmin={openPlatformAdminMutation}
       />
     </div>
   );
@@ -599,15 +936,27 @@ function UsersTable({
   loading,
   search,
   onSearchChange,
+  statusFilter,
+  onStatusFilterChange,
   onView,
   onAdjust,
+  onEdit,
+  onStatus,
+  onReset,
+  onAdmin,
 }: {
   users: AdminUser[];
   loading: boolean;
   search: string;
   onSearchChange: (value: string) => void;
+  statusFilter: AdminUserStatus | "all";
+  onStatusFilterChange: (value: AdminUserStatus | "all") => void;
   onView: (user: AdminUser) => void;
   onAdjust: (user: AdminUser) => void;
+  onEdit: (user: AdminUser) => void;
+  onStatus: (user: AdminUser) => void;
+  onReset: (user: AdminUser) => void;
+  onAdmin: (user: AdminUser) => void;
 }) {
   return (
     <>
@@ -618,34 +967,52 @@ function UsersTable({
             Account, subscription, balance, and platform access.
           </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search users"
-            className="pl-9"
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search name or email"
-            value={search}
-          />
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <select
+            aria-label="Filter users by status"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            onChange={(event) =>
+              onStatusFilterChange(
+                event.target.value as AdminUserStatus | "all",
+              )
+            }
+            value={statusFilter}
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="disabled">Disabled</option>
+          </select>
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search users"
+              className="pl-9"
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search name or email"
+              value={search}
+            />
+          </div>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[840px] text-left text-sm">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-5 py-3 font-medium">User</th>
               <th className="px-5 py-3 font-medium">Workspace</th>
               <th className="px-5 py-3 font-medium">Plan</th>
               <th className="px-5 py-3 font-medium">Balance</th>
+              <th className="px-5 py-3 font-medium">Status</th>
               <th className="px-5 py-3 font-medium">Last sign-in</th>
               <th className="px-5 py-3 text-right font-medium">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
-              <LoadingRows columns={6} />
+              <LoadingRows columns={7} />
             ) : users.length === 0 ? (
-              <EmptyRow columns={6} label="No users match this search." />
+              <EmptyRow columns={7} label="No users match this search." />
             ) : (
               users.map((user) => (
                 <tr key={user.id} className="hover:bg-muted/40">
@@ -679,6 +1046,9 @@ function UsersTable({
                   <td className="px-5 py-3 font-medium tabular-nums">
                     {user.balance.toLocaleString()}
                   </td>
+                  <td className="px-5 py-3">
+                    <UserStatusBadge status={user.status} />
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {user.lastSignInAt
                       ? formatDate(user.lastSignInAt)
@@ -694,6 +1064,58 @@ function UsersTable({
                         title="View details"
                       >
                         <Eye />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => onEdit(user)}
+                        aria-label="Edit user"
+                        title="Edit user"
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => onStatus(user)}
+                        aria-label={
+                          user.status === "active"
+                            ? "Suspend user"
+                            : "Reactivate user"
+                        }
+                        title={
+                          user.status === "active"
+                            ? "Suspend user"
+                            : "Reactivate user"
+                        }
+                      >
+                        {user.status === "active" ? <PauseCircle /> : <Check />}
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => onReset(user)}
+                        aria-label="Reset user password"
+                        title="Reset password"
+                      >
+                        <KeyRound />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() => onAdmin(user)}
+                        aria-label={
+                          user.isPlatformAdmin
+                            ? "Revoke platform administrator"
+                            : "Grant platform administrator"
+                        }
+                        title={
+                          user.isPlatformAdmin
+                            ? "Revoke platform admin"
+                            : "Grant platform admin"
+                        }
+                      >
+                        {user.isPlatformAdmin ? <ShieldOff /> : <ShieldCheck />}
                       </Button>
                       {user.workspaceId ? (
                         <Button
@@ -719,6 +1141,77 @@ function UsersTable({
         </table>
       </div>
     </>
+  );
+}
+
+type PlatformAdminRow = Awaited<
+  ReturnType<typeof fetchPlatformAdmins>
+>["administrators"][number];
+
+function PlatformAdminsTable({
+  administrators,
+  loading,
+  onRevoke,
+}: {
+  administrators: PlatformAdminRow[];
+  loading: boolean;
+  onRevoke: (administrator: PlatformAdminRow) => void;
+}) {
+  return (
+    <TableFrame
+      title="Platform administrators"
+      subtitle="Platform access is separate from workspace owner and admin roles."
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[680px] text-left text-sm">
+          <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-5 py-3 font-medium">Administrator</th>
+              <th className="px-5 py-3 font-medium">Granted</th>
+              <th className="px-5 py-3 font-medium">Granted by</th>
+              <th className="px-5 py-3 text-right font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loading ? (
+              <LoadingRows columns={4} />
+            ) : administrators.length === 0 ? (
+              <EmptyRow columns={4} label="No platform administrators found." />
+            ) : (
+              administrators.map((administrator) => (
+                <tr key={administrator.userId} className="hover:bg-muted/40">
+                  <td className="px-5 py-3">
+                    <div className="font-medium">
+                      {administrator.displayName}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {administrator.email}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {formatDate(administrator.createdAt)}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {administrator.createdByEmail ?? "System"}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onRevoke(administrator)}
+                    >
+                      <ShieldOff data-icon="inline-start" />
+                      Revoke
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </TableFrame>
   );
 }
 
@@ -983,18 +1476,403 @@ function AuditTable({
   );
 }
 
+function EditUserDialog({
+  user,
+  displayName,
+  email,
+  reason,
+  error,
+  saving,
+  onDisplayNameChange,
+  onEmailChange,
+  onReasonChange,
+  onClose,
+  onSubmit,
+}: {
+  user: AdminUser | null;
+  displayName: string;
+  email: string;
+  reason: string;
+  error: string | null;
+  saving: boolean;
+  onDisplayNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Dialog open={Boolean(user)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit}>
+          <DialogHeader className="border-b px-6 py-5 pr-14">
+            <DialogTitle>Edit user</DialogTitle>
+            <DialogDescription>
+              Update account identity details for {user?.email ?? "this user"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="admin-edit-display-name">Display name</Label>
+              <Input
+                id="admin-edit-display-name"
+                maxLength={80}
+                onChange={(event) => onDisplayNameChange(event.target.value)}
+                value={displayName}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-edit-email">Email</Label>
+              <Input
+                id="admin-edit-email"
+                maxLength={320}
+                onChange={(event) => onEmailChange(event.target.value)}
+                type="email"
+                value={email}
+              />
+            </div>
+            <ReasonField
+              id="admin-edit-reason"
+              value={reason}
+              onChange={onReasonChange}
+            />
+            {error && <FormError message={error} />}
+          </div>
+          <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UserStatusDialog({
+  user,
+  reason,
+  error,
+  saving,
+  onReasonChange,
+  onClose,
+  onSubmit,
+}: {
+  user: AdminUser | null;
+  reason: string;
+  error: string | null;
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const nextStatus = user?.status === "active" ? "suspend" : "reactivate";
+  return (
+    <Dialog open={Boolean(user)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit}>
+          <DialogHeader className="border-b px-6 py-5 pr-14">
+            <DialogTitle>
+              {nextStatus === "suspend" ? "Suspend user" : "Reactivate user"}
+            </DialogTitle>
+            <DialogDescription>
+              {nextStatus === "suspend"
+                ? "This account will lose access immediately and cannot sign in."
+                : "This account will be allowed to sign in again."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">{user?.displayName}</div>
+              <div className="text-xs text-muted-foreground">{user?.email}</div>
+            </div>
+            <ReasonField
+              id="admin-status-reason"
+              value={reason}
+              onChange={onReasonChange}
+            />
+            {error && <FormError message={error} />}
+          </div>
+          <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant={nextStatus === "suspend" ? "destructive" : "default"}
+              disabled={saving}
+            >
+              {saving && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              {nextStatus === "suspend" ? "Suspend user" : "Reactivate user"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PasswordResetDialog({
+  user,
+  reason,
+  error,
+  saving,
+  onReasonChange,
+  onClose,
+  onSubmit,
+}: {
+  user: AdminUser | null;
+  reason: string;
+  error: string | null;
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <Dialog open={Boolean(user)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit}>
+          <DialogHeader className="border-b px-6 py-5 pr-14">
+            <DialogTitle>Reset password</DialogTitle>
+            <DialogDescription>
+              Issue a one-time reset token. The current password is never shown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">{user?.displayName}</div>
+              <div className="text-xs text-muted-foreground">{user?.email}</div>
+            </div>
+            <ReasonField
+              id="admin-reset-reason"
+              value={reason}
+              onChange={onReasonChange}
+            />
+            {error && <FormError message={error} />}
+          </div>
+          <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              Issue reset token
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PasswordResetResultDialog({
+  result,
+  onClose,
+}: {
+  result: AdminPasswordResetResponse | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copyToken() {
+    if (!result) return;
+    await navigator.clipboard.writeText(result.resetToken);
+    setCopied(true);
+  }
+  return (
+    <Dialog open={Boolean(result)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
+        <DialogHeader className="border-b px-6 py-5 pr-14">
+          <DialogTitle>Reset token created</DialogTitle>
+          <DialogDescription>
+            This token is shown once and expires at{" "}
+            {result ? formatDate(result.expiresAt) : "—"}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 px-6 py-5">
+          <Label htmlFor="admin-reset-token">One-time token</Label>
+          <div className="flex gap-2">
+            <Input
+              id="admin-reset-token"
+              readOnly
+              value={result?.resetToken ?? ""}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => void copyToken()}
+              title="Copy reset token"
+              aria-label="Copy reset token"
+            >
+              {copied ? <Check /> : <Copy />}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Deliver this token through your approved support channel. It cannot
+            be recovered after closing this dialog.
+          </p>
+        </div>
+        <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+          <Button type="button" onClick={onClose}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PlatformAdminDialog({
+  user,
+  reason,
+  error,
+  saving,
+  onReasonChange,
+  onClose,
+  onSubmit,
+}: {
+  user: AdminUser | null;
+  reason: string;
+  error: string | null;
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const revoke = user?.isPlatformAdmin ?? false;
+  return (
+    <Dialog open={Boolean(user)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit}>
+          <DialogHeader className="border-b px-6 py-5 pr-14">
+            <DialogTitle>
+              {revoke ? "Revoke platform access" : "Grant platform access"}
+            </DialogTitle>
+            <DialogDescription>
+              {revoke
+                ? "This removes platform administrator access but keeps workspace permissions unchanged."
+                : "This gives the user access to the platform administration console."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <div className="font-medium">{user?.displayName}</div>
+              <div className="text-xs text-muted-foreground">{user?.email}</div>
+            </div>
+            <ReasonField
+              id="admin-platform-reason"
+              value={reason}
+              onChange={onReasonChange}
+            />
+            {error && <FormError message={error} />}
+          </div>
+          <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant={revoke ? "destructive" : "default"}
+              disabled={saving}
+            >
+              {saving && (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              )}
+              {revoke ? "Revoke access" : "Grant access"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReasonField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>Reason</Label>
+      <textarea
+        id={id}
+        className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        maxLength={500}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Explain why this change is needed"
+        value={value}
+      />
+    </div>
+  );
+}
+
+function FormError({ message }: { message: string }) {
+  return (
+    <p
+      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+      role="alert"
+    >
+      {message}
+    </p>
+  );
+}
+
 function UserDetailDialog({
   detail,
   loading,
   error,
   onClose,
   onAdjust,
+  onEdit,
+  onStatus,
+  onReset,
+  onAdmin,
 }: {
   detail: AdminUserDetail | null;
   loading: boolean;
   error: string | null;
   onClose: () => void;
   onAdjust: (user: AdminUser) => void;
+  onEdit: (user: AdminUser) => void;
+  onStatus: (user: AdminUser) => void;
+  onReset: (user: AdminUser) => void;
+  onAdmin: (user: AdminUser) => void;
 }) {
   const user = detail?.user;
 
@@ -1029,6 +1907,9 @@ function UserDetailDialog({
                   {user.isPlatformAdmin && <ShieldCheck className="size-3.5" />}
                   {user.isPlatformAdmin ? "Platform admin" : "Workspace user"}
                 </span>
+              </DetailTile>
+              <DetailTile label="Status">
+                <UserStatusBadge status={user.status} />
               </DetailTile>
               <DetailTile label="Registered">
                 {formatDate(user.createdAt)}
@@ -1080,11 +1961,55 @@ function UserDetailDialog({
         </SheetBody>
 
         <SheetFooter>
-          {user?.workspaceId && (
-            <Button type="button" onClick={() => onAdjust(user)}>
-              <Coins data-icon="inline-start" />
-              Adjust credits
-            </Button>
+          {user && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onEdit(user)}
+              >
+                <Pencil data-icon="inline-start" />
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onStatus(user)}
+              >
+                {user.status === "active" ? (
+                  <PauseCircle data-icon="inline-start" />
+                ) : (
+                  <Check data-icon="inline-start" />
+                )}
+                {user.status === "active" ? "Suspend" : "Reactivate"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onReset(user)}
+              >
+                <KeyRound data-icon="inline-start" />
+                Reset password
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onAdmin(user)}
+              >
+                {user.isPlatformAdmin ? (
+                  <ShieldOff data-icon="inline-start" />
+                ) : (
+                  <ShieldCheck data-icon="inline-start" />
+                )}
+                {user.isPlatformAdmin ? "Revoke admin" : "Grant admin"}
+              </Button>
+              {user.workspaceId && (
+                <Button type="button" onClick={() => onAdjust(user)}>
+                  <Coins data-icon="inline-start" />
+                  Adjust credits
+                </Button>
+              )}
+            </div>
           )}
         </SheetFooter>
       </SheetContent>
@@ -1258,6 +2183,22 @@ function StatusBadge({ status }: { status: string }) {
       className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
     >
       {status.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+function UserStatusBadge({ status }: { status: AdminUserStatus }) {
+  const tone =
+    status === "active"
+      ? "border-transparent bg-emerald-100 text-emerald-800"
+      : status === "suspended"
+        ? "border-transparent bg-amber-100 text-amber-800"
+        : "border-transparent bg-red-100 text-red-800";
+  return (
+    <span
+      className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
+    >
+      {status}
     </span>
   );
 }
