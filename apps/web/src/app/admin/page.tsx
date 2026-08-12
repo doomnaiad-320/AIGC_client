@@ -101,46 +101,44 @@ const tabs: Array<{
 }> = [
   {
     id: "users",
-    label: "Users",
-    description: "Manage accounts, workspace access, plans, and balances.",
+    label: "用户管理",
+    description: "管理用户账号、工作区权限、套餐与点数余额。",
     icon: Users,
   },
   {
     id: "workspaces",
-    label: "Workspaces",
-    description:
-      "Review workspace ownership, members, projects, plans, and balances.",
+    label: "工作区管理",
+    description: "查看工作区归属、成员、项目、套餐与点数余额。",
     icon: Building2,
   },
   {
     id: "jobs",
-    label: "Generation jobs",
-    description: "Monitor queued work, execution status, and failures.",
+    label: "生成任务",
+    description: "监控任务队列、执行状态与失败原因。",
     icon: Workflow,
   },
   {
     id: "agent-runs",
-    label: "Agent runs",
-    description: "Review agent sessions, models, threads, and runtime errors.",
+    label: "智能体运行",
+    description: "查看智能体会话、模型、线程与运行错误。",
     icon: Bot,
   },
   {
     id: "ledger",
-    label: "Credit ledger",
-    description: "Review grants, usage, refunds, and manual adjustments.",
+    label: "点数流水",
+    description: "查看点数发放、消耗、退还与人工调整记录。",
     icon: Coins,
   },
   {
     id: "audit",
-    label: "Audit log",
-    description: "Track sensitive administrator actions and their targets.",
+    label: "审计日志",
+    description: "追踪管理员的敏感操作及其操作对象。",
     icon: ClipboardList,
   },
   {
     id: "platform-admins",
-    label: "Administrators",
-    description:
-      "Manage platform-level access separately from workspace roles.",
+    label: "平台管理员",
+    description: "单独管理平台级权限，与工作区角色明确区分。",
     icon: ShieldCheck,
   },
 ];
@@ -259,7 +257,7 @@ export default function AdminPage() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Unable to load admin data.",
+          : "无法加载管理后台数据。",
       );
     } finally {
       setLoadingData(false);
@@ -298,7 +296,7 @@ export default function AdminPage() {
       setUserDetailError(
         detailError instanceof Error
           ? detailError.message
-          : "Unable to load user detail.",
+          : "无法加载用户详情。",
       );
     } finally {
       setLoadingUserDetail(false);
@@ -318,7 +316,7 @@ export default function AdminPage() {
       setWorkspaceDetailError(
         detailError instanceof Error
           ? detailError.message
-          : "Unable to load workspace detail.",
+          : "无法加载工作区详情。",
       );
     } finally {
       setLoadingWorkspaceDetail(false);
@@ -347,11 +345,11 @@ export default function AdminPage() {
     const target = editingUser;
     if (!token || !target) return;
     if (editReason.trim().length < 3) {
-      setEditError("Add a reason for this profile change.");
+      setEditError("请填写本次资料变更的原因。");
       return;
     }
     if (!editDisplayName.trim() && !editEmail.trim()) {
-      setEditError("Enter a display name or email address.");
+      setEditError("请输入用户名或邮箱地址。");
       return;
     }
     setSavingEdit(true);
@@ -369,9 +367,7 @@ export default function AdminPage() {
       await load(search, userStatusFilter);
     } catch (saveError) {
       setEditError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to update this user.",
+        saveError instanceof Error ? saveError.message : "无法更新该用户。",
       );
     } finally {
       setSavingEdit(false);
@@ -396,7 +392,7 @@ export default function AdminPage() {
     const target = statusUser;
     if (!token || !target) return;
     if (statusReason.trim().length < 3) {
-      setStatusError("Add a reason for this status change.");
+      setStatusError("请填写本次状态变更的原因。");
       return;
     }
     setSavingStatus(true);
@@ -411,9 +407,7 @@ export default function AdminPage() {
       await load(search, userStatusFilter);
     } catch (saveError) {
       setStatusError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to update this user status.",
+        saveError instanceof Error ? saveError.message : "无法更新该用户状态。",
       );
     } finally {
       setSavingStatus(false);
@@ -438,7 +432,7 @@ export default function AdminPage() {
     const target = resetUser;
     if (!token || !target) return;
     if (resetReason.trim().length < 3) {
-      setResetError("Add a reason for issuing this reset.");
+      setResetError("请填写发起密码重置的原因。");
       return;
     }
     setSavingReset(true);
@@ -452,9 +446,7 @@ export default function AdminPage() {
       await load(search, userStatusFilter);
     } catch (saveError) {
       setResetError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to issue a password reset.",
+        saveError instanceof Error ? saveError.message : "无法发起密码重置。",
       );
     } finally {
       setSavingReset(false);
@@ -481,7 +473,7 @@ export default function AdminPage() {
     const target = adminMutationUser;
     if (!token || !target) return;
     if (adminMutationReason.trim().length < 3) {
-      setAdminMutationError("Add a reason for this access change.");
+      setAdminMutationError("请填写本次权限变更的原因。");
       return;
     }
     setSavingAdminMutation(true);
@@ -503,7 +495,7 @@ export default function AdminPage() {
       setAdminMutationError(
         saveError instanceof Error
           ? saveError.message
-          : "Unable to update platform access.",
+          : "无法更新平台管理权限。",
       );
     } finally {
       setSavingAdminMutation(false);
@@ -526,11 +518,11 @@ export default function AdminPage() {
 
     const amount = Number(adjustmentAmount);
     if (!Number.isInteger(amount) || amount === 0) {
-      setAdjustmentError("Enter a whole-number adjustment that is not zero.");
+      setAdjustmentError("请输入非零整数作为调整数额。");
       return;
     }
     if (adjustmentReason.trim().length < 3) {
-      setAdjustmentError("Add a short reason for this adjustment.");
+      setAdjustmentError("请填写本次点数调整的原因。");
       return;
     }
 
@@ -551,9 +543,7 @@ export default function AdminPage() {
       }
     } catch (saveError) {
       setAdjustmentError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Unable to adjust credits.",
+        saveError instanceof Error ? saveError.message : "无法调整点数。",
       );
     } finally {
       setSavingAdjustment(false);
@@ -577,12 +567,12 @@ export default function AdminPage() {
           <Link
             href="/admin"
             className="flex h-10 items-center gap-3 px-3"
-            aria-label="Admin Console home"
+            aria-label="管理后台首页"
           >
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <ShieldCheck className="size-4" />
             </span>
-            <span className="text-sm font-semibold">Loomic Admin</span>
+            <span className="text-sm font-semibold">Loomic 管理后台</span>
           </Link>
           <div className="mt-6 space-y-1">
             {tabs.map((item) => {
@@ -612,7 +602,7 @@ export default function AdminPage() {
               className="flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ArrowLeft className="size-4" />
-              Return to workspace
+              返回工作台
             </Link>
           </div>
         </aside>
@@ -621,18 +611,18 @@ export default function AdminPage() {
           <header className="flex min-h-14 flex-wrap items-center justify-between gap-4 border-b pb-5">
             <div>
               <h1 className="text-xl font-semibold">
-                {activeTab?.label ?? "Users"}
+                {activeTab?.label ?? "用户管理"}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {activeTab?.description ??
-                  "Manage accounts, workspace access, plans, and balances."}
+                  "管理用户账号、工作区权限、套餐与点数余额。"}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Link href="/home" className="lg:hidden">
                 <Button variant="outline" size="sm">
                   <ArrowLeft data-icon="inline-start" />
-                  Workspace
+                  工作台
                 </Button>
               </Link>
               <Button
@@ -646,14 +636,14 @@ export default function AdminPage() {
                   data-icon="inline-start"
                   className={loadingData ? "animate-spin" : undefined}
                 />
-                Refresh
+                刷新
               </Button>
             </div>
           </header>
 
           <nav
             className="mt-4 flex gap-1 overflow-x-auto border-b lg:hidden"
-            aria-label="Admin sections"
+            aria-label="管理后台栏目"
           >
             {tabs.map((item) => {
               const Icon = item.icon;
@@ -688,26 +678,22 @@ export default function AdminPage() {
 
           <section
             className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4"
-            aria-label="Platform overview"
+            aria-label="平台概览"
           >
+            <Stat label="用户总数" value={overview?.totalUsers} icon={Users} />
             <Stat
-              label="Total users"
-              value={overview?.totalUsers}
-              icon={Users}
-            />
-            <Stat
-              label="Active jobs"
+              label="进行中的任务"
               value={overview?.activeJobs}
               icon={Activity}
             />
             <Stat
-              label="Failures · 24h"
+              label="失败任务 · 24 小时"
               value={overview?.failedJobs24h}
               icon={BadgeAlert}
               alert
             />
             <Stat
-              label="Adjustments · 24h"
+              label="人工调点 · 24 小时"
               value={overview?.adjustments24h}
               icon={CircleDollarSign}
             />
@@ -789,9 +775,9 @@ export default function AdminPage() {
         <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
           <form onSubmit={submitAdjustment}>
             <DialogHeader className="border-b px-6 py-5 pr-14">
-              <DialogTitle>Adjust credits</DialogTitle>
+              <DialogTitle>调整点数</DialogTitle>
               <DialogDescription>
-                Create an audited balance adjustment for this user.
+                为该用户创建一笔可审计的余额调整记录。
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-5 px-6 py-5">
@@ -801,7 +787,7 @@ export default function AdminPage() {
                     {adjustingUser?.email}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    Current balance
+                    当前余额
                   </div>
                 </div>
                 <div className="font-medium tabular-nums">
@@ -809,30 +795,29 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="admin-credit-amount">Credit adjustment</Label>
+                <Label htmlFor="admin-credit-amount">调整数量</Label>
                 <Input
                   id="admin-credit-amount"
                   inputMode="numeric"
                   max="500000"
                   min="-500000"
                   onChange={(event) => setAdjustmentAmount(event.target.value)}
-                  placeholder="e.g. 500 or -100"
+                  placeholder="例如 500 或 -100"
                   type="number"
                   value={adjustmentAmount}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Use a positive value to grant credits or a negative value to
-                  deduct them.
+                  正数表示增加点数，负数表示扣除点数。
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="admin-credit-reason">Reason</Label>
+                <Label htmlFor="admin-credit-reason">调整原因</Label>
                 <textarea
                   id="admin-credit-reason"
                   className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   maxLength={500}
                   onChange={(event) => setAdjustmentReason(event.target.value)}
-                  placeholder="Explain why this adjustment is needed"
+                  placeholder="请说明本次调整的原因"
                   value={adjustmentReason}
                 />
               </div>
@@ -852,13 +837,13 @@ export default function AdminPage() {
                 onClick={closeAdjustmentDialog}
                 disabled={savingAdjustment}
               >
-                Cancel
+                取消
               </Button>
               <Button type="submit" disabled={savingAdjustment}>
                 {savingAdjustment && (
                   <Loader2 data-icon="inline-start" className="animate-spin" />
                 )}
-                Apply adjustment
+                确认调整
               </Button>
             </DialogFooter>
           </form>
@@ -1023,14 +1008,14 @@ function UsersTable({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold">All users</h2>
+          <h2 className="text-sm font-semibold">全部用户</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Account, subscription, balance, and platform access.
+            查看账号、套餐、余额与平台权限。
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
-            aria-label="Filter users by status"
+            aria-label="按状态筛选用户"
             className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             onChange={(event) =>
               onStatusFilterChange(
@@ -1039,18 +1024,18 @@ function UsersTable({
             }
             value={statusFilter}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-            <option value="disabled">Disabled</option>
+            <option value="all">全部状态</option>
+            <option value="active">正常</option>
+            <option value="suspended">已暂停</option>
+            <option value="disabled">已禁用</option>
           </select>
           <div className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              aria-label="Search users"
+              aria-label="搜索用户"
               className="pl-9"
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search name or email"
+              placeholder="搜索用户名或邮箱"
               value={search}
             />
           </div>
@@ -1060,20 +1045,20 @@ function UsersTable({
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">User</th>
-              <th className="px-5 py-3 font-medium">Workspace</th>
-              <th className="px-5 py-3 font-medium">Plan</th>
-              <th className="px-5 py-3 font-medium">Balance</th>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Last sign-in</th>
-              <th className="px-5 py-3 text-right font-medium">Action</th>
+              <th className="px-5 py-3 font-medium">用户</th>
+              <th className="px-5 py-3 font-medium">工作区</th>
+              <th className="px-5 py-3 font-medium">套餐</th>
+              <th className="px-5 py-3 font-medium">点数余额</th>
+              <th className="px-5 py-3 font-medium">状态</th>
+              <th className="px-5 py-3 font-medium">最近登录</th>
+              <th className="px-5 py-3 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={7} />
             ) : users.length === 0 ? (
-              <EmptyRow columns={7} label="No users match this search." />
+              <EmptyRow columns={7} label="没有符合条件的用户。" />
             ) : (
               users.map((user) => (
                 <tr key={user.id} className="hover:bg-muted/40">
@@ -1088,7 +1073,7 @@ function UsersTable({
                           {user.isPlatformAdmin && (
                             <ShieldCheck
                               className="size-3.5 text-foreground"
-                              aria-label="Platform admin"
+                              aria-label="平台管理员"
                             />
                           )}
                         </div>
@@ -1113,7 +1098,7 @@ function UsersTable({
                   <td className="px-5 py-3 text-muted-foreground">
                     {user.lastSignInAt
                       ? formatDate(user.lastSignInAt)
-                      : "Never"}
+                      : "从未登录"}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-1">
@@ -1121,8 +1106,8 @@ function UsersTable({
                         size="icon-sm"
                         variant="ghost"
                         onClick={() => onView(user)}
-                        aria-label="View user details"
-                        title="View details"
+                        aria-label="查看用户详情"
+                        title="查看详情"
                       >
                         <Eye />
                       </Button>
@@ -1130,8 +1115,8 @@ function UsersTable({
                         size="icon-sm"
                         variant="ghost"
                         onClick={() => onEdit(user)}
-                        aria-label="Edit user"
-                        title="Edit user"
+                        aria-label="编辑用户"
+                        title="编辑用户"
                       >
                         <Pencil />
                       </Button>
@@ -1140,14 +1125,10 @@ function UsersTable({
                         variant="ghost"
                         onClick={() => onStatus(user)}
                         aria-label={
-                          user.status === "active"
-                            ? "Suspend user"
-                            : "Reactivate user"
+                          user.status === "active" ? "暂停用户" : "恢复用户"
                         }
                         title={
-                          user.status === "active"
-                            ? "Suspend user"
-                            : "Reactivate user"
+                          user.status === "active" ? "暂停用户" : "恢复用户"
                         }
                       >
                         {user.status === "active" ? <PauseCircle /> : <Check />}
@@ -1156,8 +1137,8 @@ function UsersTable({
                         size="icon-sm"
                         variant="ghost"
                         onClick={() => onReset(user)}
-                        aria-label="Reset user password"
-                        title="Reset password"
+                        aria-label="重置用户密码"
+                        title="重置密码"
                       >
                         <KeyRound />
                       </Button>
@@ -1167,13 +1148,13 @@ function UsersTable({
                         onClick={() => onAdmin(user)}
                         aria-label={
                           user.isPlatformAdmin
-                            ? "Revoke platform administrator"
-                            : "Grant platform administrator"
+                            ? "撤销平台管理员权限"
+                            : "授予平台管理员权限"
                         }
                         title={
                           user.isPlatformAdmin
-                            ? "Revoke platform admin"
-                            : "Grant platform admin"
+                            ? "撤销平台管理员"
+                            : "设为平台管理员"
                         }
                       >
                         {user.isPlatformAdmin ? <ShieldOff /> : <ShieldCheck />}
@@ -1183,8 +1164,8 @@ function UsersTable({
                           size="icon-sm"
                           variant="ghost"
                           onClick={() => onAdjust(user)}
-                          aria-label="Adjust user credits"
-                          title="Adjust credits"
+                          aria-label="调整用户点数"
+                          title="调整点数"
                         >
                           <Coins />
                         </Button>
@@ -1216,35 +1197,35 @@ function WorkspacesTable({
 }) {
   return (
     <TableFrame
-      title="All workspaces"
-      subtitle="Ownership, membership, projects, subscriptions, and balances."
+      title="全部工作区"
+      subtitle="查看归属、成员、项目、套餐与点数余额。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Workspace</th>
-              <th className="px-5 py-3 font-medium">Owner</th>
-              <th className="px-5 py-3 font-medium">Type</th>
-              <th className="px-5 py-3 font-medium">Members</th>
-              <th className="px-5 py-3 font-medium">Projects</th>
-              <th className="px-5 py-3 font-medium">Plan</th>
-              <th className="px-5 py-3 font-medium">Balance</th>
-              <th className="px-5 py-3 text-right font-medium">Action</th>
+              <th className="px-5 py-3 font-medium">工作区</th>
+              <th className="px-5 py-3 font-medium">所有者</th>
+              <th className="px-5 py-3 font-medium">类型</th>
+              <th className="px-5 py-3 font-medium">成员数</th>
+              <th className="px-5 py-3 font-medium">项目数</th>
+              <th className="px-5 py-3 font-medium">套餐</th>
+              <th className="px-5 py-3 font-medium">点数余额</th>
+              <th className="px-5 py-3 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={8} />
             ) : workspaces.length === 0 ? (
-              <EmptyRow columns={8} label="No workspaces found." />
+              <EmptyRow columns={8} label="暂无工作区。" />
             ) : (
               workspaces.map((workspace) => (
                 <tr key={workspace.id} className="hover:bg-muted/40">
                   <td className="px-5 py-3">
                     <div className="font-medium">{workspace.name}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      Created {formatDate(workspace.createdAt)}
+                      创建于 {formatDate(workspace.createdAt)}
                     </div>
                   </td>
                   <td className="px-5 py-3">
@@ -1256,7 +1237,7 @@ function WorkspacesTable({
                     </div>
                   </td>
                   <td className="px-5 py-3 capitalize text-muted-foreground">
-                    {workspace.type}
+                    {workspaceTypeLabel(workspace.type)}
                   </td>
                   <td className="px-5 py-3 tabular-nums">
                     {workspace.memberCount}
@@ -1278,7 +1259,7 @@ function WorkspacesTable({
                       onClick={() => onView(workspace)}
                     >
                       <Eye data-icon="inline-start" />
-                      View
+                      查看
                     </Button>
                   </td>
                 </tr>
@@ -1306,24 +1287,24 @@ function PlatformAdminsTable({
 }) {
   return (
     <TableFrame
-      title="Platform administrators"
-      subtitle="Platform access is separate from workspace owner and admin roles."
+      title="平台管理员"
+      subtitle="平台权限与工作区所有者、管理员角色相互独立。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[680px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Administrator</th>
-              <th className="px-5 py-3 font-medium">Granted</th>
-              <th className="px-5 py-3 font-medium">Granted by</th>
-              <th className="px-5 py-3 text-right font-medium">Action</th>
+              <th className="px-5 py-3 font-medium">管理员</th>
+              <th className="px-5 py-3 font-medium">授权时间</th>
+              <th className="px-5 py-3 font-medium">授权人</th>
+              <th className="px-5 py-3 text-right font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={4} />
             ) : administrators.length === 0 ? (
-              <EmptyRow columns={4} label="No platform administrators found." />
+              <EmptyRow columns={4} label="暂无平台管理员。" />
             ) : (
               administrators.map((administrator) => (
                 <tr key={administrator.userId} className="hover:bg-muted/40">
@@ -1339,7 +1320,7 @@ function PlatformAdminsTable({
                     {formatDate(administrator.createdAt)}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
-                    {administrator.createdByEmail ?? "System"}
+                    {administrator.createdByEmail ?? "系统"}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <Button
@@ -1349,7 +1330,7 @@ function PlatformAdminsTable({
                       onClick={() => onRevoke(administrator)}
                     >
                       <ShieldOff data-icon="inline-start" />
-                      Revoke
+                      撤销权限
                     </Button>
                   </td>
                 </tr>
@@ -1364,27 +1345,24 @@ function PlatformAdminsTable({
 
 function JobsTable({ jobs, loading }: { jobs: AdminJob[]; loading: boolean }) {
   return (
-    <TableFrame
-      title="Generation jobs"
-      subtitle="Queue health and recent execution results."
-    >
+    <TableFrame title="生成任务" subtitle="查看队列运行状况与近期执行结果。">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Type</th>
-              <th className="px-5 py-3 font-medium">User</th>
-              <th className="px-5 py-3 font-medium">Workspace</th>
-              <th className="px-5 py-3 font-medium">Created</th>
-              <th className="px-5 py-3 font-medium">Failure</th>
+              <th className="px-5 py-3 font-medium">状态</th>
+              <th className="px-5 py-3 font-medium">任务类型</th>
+              <th className="px-5 py-3 font-medium">用户</th>
+              <th className="px-5 py-3 font-medium">工作区</th>
+              <th className="px-5 py-3 font-medium">创建时间</th>
+              <th className="px-5 py-3 font-medium">失败原因</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={6} />
             ) : jobs.length === 0 ? (
-              <EmptyRow columns={6} label="No generation jobs recorded yet." />
+              <EmptyRow columns={6} label="暂无生成任务记录。" />
             ) : (
               jobs.map((job) => (
                 <tr key={job.id} className="hover:bg-muted/40">
@@ -1392,7 +1370,7 @@ function JobsTable({ jobs, loading }: { jobs: AdminJob[]; loading: boolean }) {
                     <StatusBadge status={job.status} />
                   </td>
                   <td className="px-5 py-3 font-medium">
-                    {job.jobType.replace(/_/g, " ")}
+                    {jobTypeLabel(job.jobType)}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {job.userEmail ?? "—"}
@@ -1428,27 +1406,27 @@ function AgentRunsTable({
 }) {
   return (
     <TableFrame
-      title="Agent runs"
-      subtitle="Conversation-level agent execution status, model, thread, and errors."
+      title="智能体运行"
+      subtitle="查看会话级智能体的执行状态、模型、线程与错误。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Session</th>
-              <th className="px-5 py-3 font-medium">User</th>
-              <th className="px-5 py-3 font-medium">Workspace</th>
-              <th className="px-5 py-3 font-medium">Model</th>
-              <th className="px-5 py-3 font-medium">Created</th>
-              <th className="px-5 py-3 font-medium">Error</th>
+              <th className="px-5 py-3 font-medium">状态</th>
+              <th className="px-5 py-3 font-medium">会话</th>
+              <th className="px-5 py-3 font-medium">用户</th>
+              <th className="px-5 py-3 font-medium">工作区</th>
+              <th className="px-5 py-3 font-medium">模型</th>
+              <th className="px-5 py-3 font-medium">创建时间</th>
+              <th className="px-5 py-3 font-medium">错误</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={7} />
             ) : runs.length === 0 ? (
-              <EmptyRow columns={7} label="No agent runs recorded yet." />
+              <EmptyRow columns={7} label="暂无智能体运行记录。" />
             ) : (
               runs.map((run) => (
                 <tr key={run.id} className="hover:bg-muted/40">
@@ -1457,7 +1435,7 @@ function AgentRunsTable({
                   </td>
                   <td className="px-5 py-3">
                     <div className="font-medium">
-                      {run.sessionTitle ?? "Untitled session"}
+                      {run.sessionTitle ?? "未命名会话"}
                     </div>
                     <div className="max-w-56 truncate text-xs text-muted-foreground">
                       {run.threadId}
@@ -1502,32 +1480,32 @@ function LedgerTable({
 }: { transactions: AdminCreditTransaction[]; loading: boolean }) {
   return (
     <TableFrame
-      title="Credit ledger"
-      subtitle="Append-only record of grants, usage, refunds, and adjustments."
+      title="点数流水"
+      subtitle="仅追加记录点数发放、消耗、退还与人工调整。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[780px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Type</th>
-              <th className="px-5 py-3 font-medium">User</th>
-              <th className="px-5 py-3 font-medium">Amount</th>
-              <th className="px-5 py-3 font-medium">Balance after</th>
-              <th className="px-5 py-3 font-medium">Reason</th>
-              <th className="px-5 py-3 font-medium">Time</th>
+              <th className="px-5 py-3 font-medium">类型</th>
+              <th className="px-5 py-3 font-medium">用户</th>
+              <th className="px-5 py-3 font-medium">变动点数</th>
+              <th className="px-5 py-3 font-medium">变动后余额</th>
+              <th className="px-5 py-3 font-medium">原因</th>
+              <th className="px-5 py-3 font-medium">时间</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={6} />
             ) : transactions.length === 0 ? (
-              <EmptyRow columns={6} label="No credit activity recorded yet." />
+              <EmptyRow columns={6} label="暂无点数流水。" />
             ) : (
               transactions.map((item) => (
                 <tr key={item.id} className="hover:bg-muted/40">
                   <td className="px-5 py-3">
                     <span className="capitalize text-muted-foreground">
-                      {item.transactionType.replace(/_/g, " ")}
+                      {transactionTypeLabel(item.transactionType)}
                     </span>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
@@ -1572,32 +1550,31 @@ function AuditTable({
 }: { events: AdminAuditEvent[]; loading: boolean }) {
   return (
     <TableFrame
-      title="Operator audit log"
-      subtitle="Every sensitive console action is recorded with actor and target context."
+      title="管理员审计日志"
+      subtitle="所有敏感操作均记录操作者、操作对象与上下文。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th className="px-5 py-3 font-medium">Action</th>
-              <th className="px-5 py-3 font-medium">Operator</th>
-              <th className="px-5 py-3 font-medium">Target</th>
-              <th className="px-5 py-3 font-medium">Details</th>
-              <th className="px-5 py-3 font-medium">Time</th>
+              <th className="px-5 py-3 font-medium">操作</th>
+              <th className="px-5 py-3 font-medium">操作者</th>
+              <th className="px-5 py-3 font-medium">操作对象</th>
+              <th className="px-5 py-3 font-medium">详情</th>
+              <th className="px-5 py-3 font-medium">时间</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <LoadingRows columns={5} />
             ) : events.length === 0 ? (
-              <EmptyRow
-                columns={5}
-                label="No administrator actions recorded yet."
-              />
+              <EmptyRow columns={5} label="暂无管理员操作记录。" />
             ) : (
               events.map((event) => (
                 <tr key={event.id} className="hover:bg-muted/40">
-                  <td className="px-5 py-3 font-medium">{event.action}</td>
+                  <td className="px-5 py-3 font-medium">
+                    {auditActionLabel(event.action)}
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {event.actorEmail}
                   </td>
@@ -1653,14 +1630,14 @@ function EditUserDialog({
       <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b px-6 py-5 pr-14">
-            <DialogTitle>Edit user</DialogTitle>
+            <DialogTitle>编辑用户</DialogTitle>
             <DialogDescription>
-              Update account identity details for {user?.email ?? "this user"}.
+              更新 {user?.email ?? "该用户"} 的账号资料。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
-              <Label htmlFor="admin-edit-display-name">Display name</Label>
+              <Label htmlFor="admin-edit-display-name">用户名</Label>
               <Input
                 id="admin-edit-display-name"
                 maxLength={80}
@@ -1669,7 +1646,7 @@ function EditUserDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="admin-edit-email">Email</Label>
+              <Label htmlFor="admin-edit-email">邮箱</Label>
               <Input
                 id="admin-edit-email"
                 maxLength={320}
@@ -1692,13 +1669,13 @@ function EditUserDialog({
               onClick={onClose}
               disabled={saving}
             >
-              Cancel
+              取消
             </Button>
             <Button type="submit" disabled={saving}>
               {saving && (
                 <Loader2 data-icon="inline-start" className="animate-spin" />
               )}
-              Save changes
+              保存修改
             </Button>
           </DialogFooter>
         </form>
@@ -1731,12 +1708,12 @@ function UserStatusDialog({
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b px-6 py-5 pr-14">
             <DialogTitle>
-              {nextStatus === "suspend" ? "Suspend user" : "Reactivate user"}
+              {nextStatus === "suspend" ? "暂停用户" : "恢复用户"}
             </DialogTitle>
             <DialogDescription>
               {nextStatus === "suspend"
-                ? "This account will lose access immediately and cannot sign in."
-                : "This account will be allowed to sign in again."}
+                ? "该账号将立即失去访问权限，且无法继续登录。"
+                : "该账号将恢复登录与访问权限。"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
@@ -1758,7 +1735,7 @@ function UserStatusDialog({
               onClick={onClose}
               disabled={saving}
             >
-              Cancel
+              取消
             </Button>
             <Button
               type="submit"
@@ -1768,7 +1745,7 @@ function UserStatusDialog({
               {saving && (
                 <Loader2 data-icon="inline-start" className="animate-spin" />
               )}
-              {nextStatus === "suspend" ? "Suspend user" : "Reactivate user"}
+              {nextStatus === "suspend" ? "暂停用户" : "恢复用户"}
             </Button>
           </DialogFooter>
         </form>
@@ -1799,9 +1776,9 @@ function PasswordResetDialog({
       <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b px-6 py-5 pr-14">
-            <DialogTitle>Reset password</DialogTitle>
+            <DialogTitle>重置密码</DialogTitle>
             <DialogDescription>
-              Issue a one-time reset token. The current password is never shown.
+              生成一次性密码重置令牌，系统不会显示用户当前密码。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
@@ -1823,13 +1800,13 @@ function PasswordResetDialog({
               onClick={onClose}
               disabled={saving}
             >
-              Cancel
+              取消
             </Button>
             <Button type="submit" disabled={saving}>
               {saving && (
                 <Loader2 data-icon="inline-start" className="animate-spin" />
               )}
-              Issue reset token
+              生成重置令牌
             </Button>
           </DialogFooter>
         </form>
@@ -1855,14 +1832,14 @@ function PasswordResetResultDialog({
     <Dialog open={Boolean(result)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
         <DialogHeader className="border-b px-6 py-5 pr-14">
-          <DialogTitle>Reset token created</DialogTitle>
+          <DialogTitle>重置令牌已生成</DialogTitle>
           <DialogDescription>
-            This token is shown once and expires at{" "}
-            {result ? formatDate(result.expiresAt) : "—"}.
+            该令牌仅显示一次，将于 {result ? formatDate(result.expiresAt) : "—"}{" "}
+            失效。
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 px-6 py-5">
-          <Label htmlFor="admin-reset-token">One-time token</Label>
+          <Label htmlFor="admin-reset-token">一次性令牌</Label>
           <div className="flex gap-2">
             <Input
               id="admin-reset-token"
@@ -1874,20 +1851,19 @@ function PasswordResetResultDialog({
               size="icon"
               variant="outline"
               onClick={() => void copyToken()}
-              title="Copy reset token"
-              aria-label="Copy reset token"
+              title="复制重置令牌"
+              aria-label="复制重置令牌"
             >
               {copied ? <Check /> : <Copy />}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Deliver this token through your approved support channel. It cannot
-            be recovered after closing this dialog.
+            请通过已批准的客服渠道传递此令牌。关闭弹窗后将无法再次查看。
           </p>
         </div>
         <DialogFooter className="mx-0 mb-0 mt-0 rounded-b-lg px-6 py-4">
           <Button type="button" onClick={onClose}>
-            Done
+            完成
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1919,12 +1895,12 @@ function PlatformAdminDialog({
         <form onSubmit={onSubmit}>
           <DialogHeader className="border-b px-6 py-5 pr-14">
             <DialogTitle>
-              {revoke ? "Revoke platform access" : "Grant platform access"}
+              {revoke ? "撤销平台管理权限" : "授予平台管理权限"}
             </DialogTitle>
             <DialogDescription>
               {revoke
-                ? "This removes platform administrator access but keeps workspace permissions unchanged."
-                : "This gives the user access to the platform administration console."}
+                ? "撤销平台管理员权限，不会改变其工作区权限。"
+                : "授予该用户访问平台管理后台的权限。"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
@@ -1946,7 +1922,7 @@ function PlatformAdminDialog({
               onClick={onClose}
               disabled={saving}
             >
-              Cancel
+              取消
             </Button>
             <Button
               type="submit"
@@ -1956,7 +1932,7 @@ function PlatformAdminDialog({
               {saving && (
                 <Loader2 data-icon="inline-start" className="animate-spin" />
               )}
-              {revoke ? "Revoke access" : "Grant access"}
+              {revoke ? "撤销权限" : "授予权限"}
             </Button>
           </DialogFooter>
         </form>
@@ -1976,13 +1952,13 @@ function ReasonField({
 }) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>Reason</Label>
+      <Label htmlFor={id}>操作原因</Label>
       <textarea
         id={id}
         className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         maxLength={500}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Explain why this change is needed"
+        placeholder="请说明本次操作的原因"
         value={value}
       />
     </div>
@@ -2027,47 +2003,47 @@ function UserDetailDialog({
     <Sheet open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle>User details</SheetTitle>
+          <SheetTitle>用户详情</SheetTitle>
           <SheetDescription>
             {user
               ? `${user.displayName} · ${user.email}`
-              : "Loading account, workspace, credits, and execution activity."}
+              : "正在加载账号、工作区、点数与执行记录。"}
           </SheetDescription>
         </SheetHeader>
 
         <SheetBody>
           {user && (
             <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-b pb-6">
-              <DetailTile label="Plan">
+              <DetailTile label="套餐">
                 <PlanBadge plan={user.plan} />
               </DetailTile>
-              <DetailTile label="Balance">
+              <DetailTile label="点数余额">
                 <span className="tabular-nums">
                   {user.balance.toLocaleString()}
                 </span>
               </DetailTile>
-              <DetailTile label="Workspace">
+              <DetailTile label="工作区">
                 <span className="truncate">{user.workspaceName ?? "—"}</span>
               </DetailTile>
-              <DetailTile label="Access">
+              <DetailTile label="访问权限">
                 <span className="inline-flex items-center gap-1">
                   {user.isPlatformAdmin && <ShieldCheck className="size-3.5" />}
-                  {user.isPlatformAdmin ? "Platform admin" : "Workspace user"}
+                  {user.isPlatformAdmin ? "平台管理员" : "工作区用户"}
                 </span>
               </DetailTile>
-              <DetailTile label="Status">
+              <DetailTile label="状态">
                 <UserStatusBadge status={user.status} />
               </DetailTile>
-              <DetailTile label="Registered">
+              <DetailTile label="注册时间">
                 {formatDate(user.createdAt)}
               </DetailTile>
-              <DetailTile label="Last sign-in">
-                {user.lastSignInAt ? formatDate(user.lastSignInAt) : "Never"}
+              <DetailTile label="最近登录">
+                {user.lastSignInAt ? formatDate(user.lastSignInAt) : "从未登录"}
               </DetailTile>
-              <DetailTile label="User ID">
+              <DetailTile label="用户 ID">
                 <span className="truncate text-xs">{user.id}</span>
               </DetailTile>
-              <DetailTile label="Workspace ID">
+              <DetailTile label="工作区 ID">
                 <span className="truncate text-xs">
                   {user.workspaceId ?? "—"}
                 </span>
@@ -2086,10 +2062,7 @@ function UserDetailDialog({
           )}
 
           {loading && (
-            <div
-              className="mt-6 space-y-3"
-              aria-label="Loading recent activity"
-            >
+            <div className="mt-6 space-y-3" aria-label="正在加载近期活动">
               <div className="h-12 animate-pulse rounded-md bg-muted" />
               <div className="h-12 animate-pulse rounded-md bg-muted" />
               <div className="h-12 animate-pulse rounded-md bg-muted" />
@@ -2117,7 +2090,7 @@ function UserDetailDialog({
                 onClick={() => onEdit(user)}
               >
                 <Pencil data-icon="inline-start" />
-                Edit
+                编辑资料
               </Button>
               <Button
                 type="button"
@@ -2129,7 +2102,7 @@ function UserDetailDialog({
                 ) : (
                   <Check data-icon="inline-start" />
                 )}
-                {user.status === "active" ? "Suspend" : "Reactivate"}
+                {user.status === "active" ? "暂停用户" : "恢复用户"}
               </Button>
               <Button
                 type="button"
@@ -2137,7 +2110,7 @@ function UserDetailDialog({
                 onClick={() => onReset(user)}
               >
                 <KeyRound data-icon="inline-start" />
-                Reset password
+                重置密码
               </Button>
               <Button
                 type="button"
@@ -2149,12 +2122,12 @@ function UserDetailDialog({
                 ) : (
                   <ShieldCheck data-icon="inline-start" />
                 )}
-                {user.isPlatformAdmin ? "Revoke admin" : "Grant admin"}
+                {user.isPlatformAdmin ? "撤销管理员" : "设为管理员"}
               </Button>
               {user.workspaceId && (
                 <Button type="button" onClick={() => onAdjust(user)}>
                   <Coins data-icon="inline-start" />
-                  Adjust credits
+                  调整点数
                 </Button>
               )}
             </div>
@@ -2174,10 +2147,9 @@ function UserWorkspacesPanel({
     <section className="space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Workspaces</h3>
+          <h3 className="text-sm font-semibold">工作区</h3>
           <p className="text-xs text-muted-foreground">
-            Every workspace this user can access, including their role and
-            balance.
+            查看该用户可访问的全部工作区、角色与点数余额。
           </p>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">
@@ -2186,7 +2158,7 @@ function UserWorkspacesPanel({
       </div>
       {workspaces.length === 0 ? (
         <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-          No workspace memberships found.
+          暂无工作区成员关系。
         </div>
       ) : (
         <div className="divide-y rounded-md border">
@@ -2200,28 +2172,28 @@ function UserWorkspacesPanel({
                   <span className="truncate">{workspace.workspaceName}</span>
                   {workspace.isOwner && (
                     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Owner
+                      所有者
                     </span>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                  <span className="capitalize">{workspace.workspaceType}</span>
+                  <span>{workspaceTypeLabel(workspace.workspaceType)}</span>
                   <span aria-hidden="true">·</span>
-                  <span className="capitalize">{workspace.role}</span>
+                  <span>{workspaceRoleLabel(workspace.role)}</span>
                   <span aria-hidden="true">·</span>
-                  <span>Joined {formatDate(workspace.joinedAt)}</span>
+                  <span>加入于 {formatDate(workspace.joinedAt)}</span>
                 </div>
               </div>
               <div className="flex shrink-0 items-end gap-3 text-right">
                 <div>
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Plan
+                    套餐
                   </div>
                   <PlanBadge plan={workspace.plan} />
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Balance
+                    点数余额
                   </div>
                   <div className="mt-1 text-sm font-medium tabular-nums">
                     {workspace.balance.toLocaleString()}
@@ -2253,36 +2225,36 @@ function WorkspaceDetailDialog({
     <Sheet open={Boolean(detail)} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="sm:max-w-2xl">
         <SheetHeader>
-          <SheetTitle>Workspace details</SheetTitle>
+          <SheetTitle>工作区详情</SheetTitle>
           <SheetDescription>
             {workspace
               ? `${workspace.name} · ${workspace.ownerEmail}`
-              : "Loading ownership, membership, projects, plan, and balance."}
+              : "正在加载归属、成员、项目、套餐与点数余额。"}
           </SheetDescription>
         </SheetHeader>
         <SheetBody>
           {workspace && (
             <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-b pb-6">
-              <DetailTile label="Type">
-                <span className="capitalize">{workspace.type}</span>
+              <DetailTile label="类型">
+                <span>{workspaceTypeLabel(workspace.type)}</span>
               </DetailTile>
-              <DetailTile label="Plan">
+              <DetailTile label="套餐">
                 <PlanBadge plan={workspace.plan} />
               </DetailTile>
-              <DetailTile label="Owner">
+              <DetailTile label="所有者">
                 <span className="truncate">{workspace.ownerDisplayName}</span>
               </DetailTile>
-              <DetailTile label="Balance">
+              <DetailTile label="点数余额">
                 <span className="tabular-nums">
                   {workspace.balance.toLocaleString()}
                 </span>
               </DetailTile>
-              <DetailTile label="Members">{workspace.memberCount}</DetailTile>
-              <DetailTile label="Projects">{workspace.projectCount}</DetailTile>
-              <DetailTile label="Created">
+              <DetailTile label="成员数">{workspace.memberCount}</DetailTile>
+              <DetailTile label="项目数">{workspace.projectCount}</DetailTile>
+              <DetailTile label="创建时间">
                 {formatDate(workspace.createdAt)}
               </DetailTile>
-              <DetailTile label="Workspace ID">
+              <DetailTile label="工作区 ID">
                 <span className="truncate text-xs">{workspace.id}</span>
               </DetailTile>
             </div>
@@ -2299,10 +2271,7 @@ function WorkspaceDetailDialog({
           )}
 
           {loading && (
-            <div
-              className="mt-6 space-y-3"
-              aria-label="Loading workspace detail"
-            >
+            <div className="mt-6 space-y-3" aria-label="正在加载工作区详情">
               <div className="h-12 animate-pulse rounded-md bg-muted" />
               <div className="h-12 animate-pulse rounded-md bg-muted" />
             </div>
@@ -2312,14 +2281,14 @@ function WorkspaceDetailDialog({
             <div className="mt-6 space-y-6">
               <section className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-sm font-semibold">Members</h3>
+                  <h3 className="text-sm font-semibold">成员</h3>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {detail.members.length}
                   </span>
                 </div>
                 {detail.members.length === 0 ? (
                   <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-                    No members found.
+                    暂无成员。
                   </div>
                 ) : (
                   <div className="divide-y rounded-md border">
@@ -2339,7 +2308,7 @@ function WorkspaceDetailDialog({
                         <div className="flex shrink-0 items-center gap-2">
                           <UserStatusBadge status={member.status} />
                           <span className="rounded bg-muted px-2 py-1 text-xs font-medium capitalize">
-                            {member.role}
+                            {workspaceRoleLabel(member.role)}
                           </span>
                         </div>
                       </div>
@@ -2350,14 +2319,14 @@ function WorkspaceDetailDialog({
 
               <section className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-sm font-semibold">Projects</h3>
+                  <h3 className="text-sm font-semibold">项目</h3>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {detail.projects.length}
                   </span>
                 </div>
                 {detail.projects.length === 0 ? (
                   <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-                    No projects found.
+                    暂无项目。
                   </div>
                 ) : (
                   <div className="divide-y rounded-md border">
@@ -2375,8 +2344,7 @@ function WorkspaceDetailDialog({
                           </div>
                         </div>
                         <div className="shrink-0 text-xs text-muted-foreground">
-                          {project.canvasCount}{" "}
-                          {project.canvasCount === 1 ? "canvas" : "canvases"}
+                          {project.canvasCount} 个画布
                         </div>
                       </div>
                     ))}
@@ -2441,12 +2409,12 @@ function RecentTransactionsPanel({
   transactions: AdminCreditTransaction[];
 }) {
   return (
-    <DetailPanel title="Credit ledger" emptyLabel="No recent credit activity.">
+    <DetailPanel title="点数流水" emptyLabel="暂无近期点数记录。">
       {transactions.map((item) => (
         <div key={item.id} className="px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
             <span className="capitalize text-muted-foreground">
-              {item.transactionType.replace(/_/g, " ")}
+              {transactionTypeLabel(item.transactionType)}
             </span>
             <span
               className={cn(
@@ -2459,10 +2427,10 @@ function RecentTransactionsPanel({
             </span>
           </div>
           <div className="mt-1 truncate text-xs text-muted-foreground">
-            {item.description ?? "No reason recorded"}
+            {item.description ?? "未记录原因"}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Balance {item.balanceAfter.toLocaleString()} ·{" "}
+            余额 {item.balanceAfter.toLocaleString()} ·{" "}
             {formatDate(item.createdAt)}
           </div>
         </div>
@@ -2473,15 +2441,12 @@ function RecentTransactionsPanel({
 
 function RecentJobsPanel({ jobs }: { jobs: AdminJob[] }) {
   return (
-    <DetailPanel
-      title="Generation jobs"
-      emptyLabel="No recent generation jobs."
-    >
+    <DetailPanel title="生成任务" emptyLabel="暂无近期生成任务。">
       {jobs.map((job) => (
         <div key={job.id} className="px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
             <span className="font-medium capitalize">
-              {job.jobType.replace(/_/g, " ")}
+              {jobTypeLabel(job.jobType)}
             </span>
             <StatusBadge status={job.status} />
           </div>
@@ -2504,23 +2469,21 @@ function RecentJobsPanel({ jobs }: { jobs: AdminJob[] }) {
 
 function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
   return (
-    <DetailPanel title="Agent runs" emptyLabel="No recent agent runs.">
+    <DetailPanel title="智能体运行" emptyLabel="暂无近期智能体运行记录。">
       {runs.map((run) => (
         <div key={run.id} className="px-4 py-3 text-sm">
           <div className="flex items-start justify-between gap-3">
             <span className="min-w-0 truncate font-medium">
-              {run.sessionTitle ?? "Untitled session"}
+              {run.sessionTitle ?? "未命名会话"}
             </span>
             <StatusBadge status={run.status} />
           </div>
           <div className="mt-1 truncate text-xs text-muted-foreground">
-            {run.model ?? "No model"} · {run.threadId}
+            {run.model ?? "未指定模型"} · {run.threadId}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {formatDate(run.createdAt)}
-            {run.completedAt
-              ? ` · Completed ${formatDate(run.completedAt)}`
-              : ""}
+            {run.completedAt ? ` · 完成于 ${formatDate(run.completedAt)}` : ""}
           </div>
           {(run.errorCode || run.errorMessage) && (
             <div
@@ -2539,7 +2502,7 @@ function RecentAgentRunsPanel({ runs }: { runs: AdminAgentRun[] }) {
 function PlanBadge({ plan }: { plan: string }) {
   return (
     <span className="inline-flex rounded-md border bg-muted/50 px-2 py-0.5 text-xs font-medium capitalize text-foreground">
-      {plan}
+      {planLabel(plan)}
     </span>
   );
 }
@@ -2556,7 +2519,7 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
     >
-      {status.replace(/_/g, " ")}
+      {statusLabel(status)}
     </span>
   );
 }
@@ -2572,7 +2535,7 @@ function UserStatusBadge({ status }: { status: AdminUserStatus }) {
     <span
       className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${tone}`}
     >
-      {status}
+      {userStatusLabel(status)}
     </span>
   );
 }
@@ -2605,7 +2568,7 @@ function EmptyRow({ columns, label }: { columns: number; label: string }) {
   );
 }
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -2619,8 +2582,109 @@ function auditSummary(metadata: Record<string, unknown>) {
   const amount = metadata.amount;
   const reason = metadata.reason;
   return typeof amount === "number"
-    ? `${amount >= 0 ? "+" : ""}${amount} credits${typeof reason === "string" ? ` · ${reason}` : ""}`
-    : "Recorded";
+    ? `${amount >= 0 ? "+" : ""}${amount} 点${typeof reason === "string" ? ` · ${reason}` : ""}`
+    : typeof reason === "string"
+      ? reason
+      : "已记录";
+}
+
+function planLabel(plan: string) {
+  return (
+    (
+      {
+        free: "免费版",
+        starter: "入门版",
+        pro: "专业版",
+        ultra: "旗舰版",
+        business: "企业版",
+      } as Record<string, string>
+    )[plan] ?? "其他套餐"
+  );
+}
+
+function statusLabel(status: string) {
+  return (
+    (
+      {
+        queued: "排队中",
+        running: "运行中",
+        succeeded: "已完成",
+        completed: "已完成",
+        failed: "失败",
+        dead_letter: "已终止",
+        canceled: "已取消",
+        canceling: "取消中",
+      } as Record<string, string>
+    )[status] ?? "未知状态"
+  );
+}
+
+function userStatusLabel(status: AdminUserStatus) {
+  return {
+    active: "正常",
+    suspended: "已暂停",
+    disabled: "已禁用",
+  }[status];
+}
+
+function workspaceTypeLabel(type: string) {
+  return (
+    ({ personal: "个人", team: "团队" } as Record<string, string>)[type] ??
+    "其他"
+  );
+}
+
+function workspaceRoleLabel(role: string) {
+  return (
+    (
+      { owner: "所有者", admin: "管理员", member: "成员" } as Record<
+        string,
+        string
+      >
+    )[role] ?? "成员"
+  );
+}
+
+function jobTypeLabel(type: string) {
+  return (
+    (
+      {
+        image_generation: "图片生成",
+        video_generation: "视频生成",
+      } as Record<string, string>
+    )[type] ?? "其他任务"
+  );
+}
+
+function transactionTypeLabel(type: string) {
+  return (
+    (
+      {
+        subscription_grant: "套餐发放",
+        daily_grant: "每日发放",
+        purchase: "购买点数",
+        generation_deduct: "生成扣除",
+        generation_refund: "生成退还",
+        admin_adjustment: "人工调整",
+        bonus: "奖励点数",
+      } as Record<string, string>
+    )[type] ?? "其他变动"
+  );
+}
+
+function auditActionLabel(action: string) {
+  return (
+    (
+      {
+        "user.profile_updated": "更新用户资料",
+        "user.status_updated": "更新用户状态",
+        "user.password_reset_issued": "生成密码重置令牌",
+        "platform_admin.granted": "授予平台管理员权限",
+        "platform_admin.revoked": "撤销平台管理员权限",
+        "credits.adjusted": "人工调整点数",
+      } as Record<string, string>
+    )[action] ?? "其他管理员操作"
+  );
 }
 
 function AdminLoading() {
@@ -2628,7 +2692,7 @@ function AdminLoading() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30">
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
-        Loading Admin Console
+        正在加载管理后台
       </div>
     </div>
   );
@@ -2640,17 +2704,14 @@ function AccessDenied() {
         <span className="flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
           <ShieldCheck className="size-5" />
         </span>
-        <h1 className="mt-5 text-xl font-semibold">
-          Administrator access required
-        </h1>
+        <h1 className="mt-5 text-xl font-semibold">需要平台管理员权限</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This account can use the creative workspace but does not have platform
-          operations access.
+          该账号可以使用创作工作台，但没有平台运营管理权限。
         </p>
         <Link href="/home" className="mt-6 inline-flex">
           <Button>
             <ArrowLeft data-icon="inline-start" />
-            Return to workspace
+            返回工作台
           </Button>
         </Link>
       </div>

@@ -21,6 +21,20 @@ import type {
 import { getServerBaseUrl } from "./env";
 import { ApiApplicationError, ApiAuthError } from "./server-api";
 
+const ADMIN_ERROR_MESSAGES: Record<string, string> = {
+  unauthorized: "登录状态已失效，请重新登录。",
+  platform_admin_required: "当前账号没有平台管理员权限。",
+  admin_user_not_found: "未找到该用户。",
+  admin_workspace_not_found: "未找到该工作区。",
+  admin_query_failed: "无法查询管理后台数据。",
+  admin_user_update_failed: "无法更新用户资料。",
+  admin_user_status_update_failed: "无法更新用户状态。",
+  admin_password_reset_failed: "无法生成密码重置令牌。",
+  admin_platform_admin_update_failed: "无法更新平台管理员权限。",
+  credit_adjustment_failed: "无法调整点数，请检查余额与调整数量。",
+  admin_request_failed: "管理后台请求失败，请稍后重试。",
+};
+
 function authHeaders(accessToken: string) {
   return { Authorization: `Bearer ${accessToken}` };
 }
@@ -30,11 +44,14 @@ function jsonHeaders(accessToken: string) {
 }
 
 async function handleError(response: Response): Promise<never> {
-  if (response.status === 401) throw new ApiAuthError();
+  if (response.status === 401) {
+    throw new ApiAuthError(ADMIN_ERROR_MESSAGES.unauthorized);
+  }
   const payload = await response.json().catch(() => null);
+  const code = payload?.error?.code ?? "admin_request_failed";
   throw new ApiApplicationError(
-    payload?.error?.code ?? "admin_request_failed",
-    payload?.error?.message ?? "Unable to complete admin request.",
+    code,
+    ADMIN_ERROR_MESSAGES[code] ?? "管理后台请求失败，请稍后重试。",
   );
 }
 
