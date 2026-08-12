@@ -15,14 +15,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -50,8 +42,6 @@ export function BillingPlansPanel({ accessToken }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [createPlan, setCreatePlan] = useState<AdminBillingPlan | null>(null);
-  const [confirmReason, setConfirmReason] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,10 +60,10 @@ export function BillingPlansPanel({ accessToken }: Props) {
 
   useEffect(() => void load(), [load]);
 
-  const initialDraft = useMemo(
-    () => (editingPlan?.draft ? versionToForm(editingPlan.draft) : null),
-    [editingPlan?.draft],
-  );
+  const initialDraft = useMemo(() => {
+    const version = editingPlan?.draft ?? editingPlan?.published;
+    return version ? versionToForm(version) : null;
+  }, [editingPlan?.draft, editingPlan?.published]);
   const dirty = Boolean(
     form &&
       initialDraft &&
@@ -83,13 +73,10 @@ export function BillingPlansPanel({ accessToken }: Props) {
   function openEditor(plan: AdminBillingPlan) {
     setError(null);
     setSuccess(null);
-    if (plan.draft) {
-      setEditingPlan(plan);
-      setForm(versionToForm(plan.draft));
-      return;
-    }
-    setCreatePlan(plan);
-    setConfirmReason("");
+    const version = plan.draft ?? plan.published;
+    if (!version) return;
+    setEditingPlan(plan);
+    setForm(versionToForm(version));
   }
 
   function closeEditor() {
@@ -108,58 +95,40 @@ export function BillingPlansPanel({ accessToken }: Props) {
     setError(null);
     setSuccess(null);
     try {
+      let currentPlan = editingPlan;
+      if (!currentPlan.draft) {
+        const draftResult = await createAdminBillingPlanDraft(
+          accessToken,
+          currentPlan.code,
+          { reason: form.reason.trim() },
+        );
+        const createdPlan = draftResult.plans.find(
+          (plan) => plan.code === currentPlan.code,
+        );
+        if (!createdPlan?.draft) {
+          throw new Error("无法创建套餐编辑草稿。");
+        }
+        currentPlan = createdPlan;
+        setPlans(draftResult.plans);
+      }
+
       const result = await updateAdminBillingPlanDraft(
         accessToken,
-        editingPlan.code,
+        currentPlan.code,
         { ...form, reason: form.reason.trim() },
       );
       setPlans(result.plans);
       const nextPlan = result.plans.find(
-        (plan) => plan.code === editingPlan.code,
+        (plan) => plan.code === currentPlan.code,
       );
       if (nextPlan?.draft) {
         setEditingPlan(nextPlan);
         setForm(versionToForm(nextPlan.draft));
       }
-      setSuccess(`${editingPlan.nameZh}草稿已保存，尚未影响线上套餐。`);
+      setSuccess(`${currentPlan.nameZh}配置已保存为草稿，尚未影响线上套餐。`);
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "无法保存套餐草稿。",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function submitCreateDraft(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!createPlan || confirmReason.trim().length < 3) {
-      setError("请填写至少 3 个字的操作原因。");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const result = await createAdminBillingPlanDraft(
-        accessToken,
-        createPlan.code,
-        { reason: confirmReason.trim() },
-      );
-      setPlans(result.plans);
-      const nextPlan = result.plans.find(
-        (plan) => plan.code === createPlan.code,
-      );
-      setCreatePlan(null);
-      setConfirmReason("");
-      if (nextPlan?.draft) {
-        setEditingPlan(nextPlan);
-        setForm(versionToForm(nextPlan.draft));
-      }
-      setSuccess(`${createPlan.nameZh}编辑草稿已创建。`);
-    } catch (actionError) {
-      setError(
-        actionError instanceof Error ? actionError.message : "套餐操作失败。",
       );
     } finally {
       setSaving(false);
@@ -269,45 +238,6 @@ export function BillingPlansPanel({ accessToken }: Props) {
           </tbody>
         </table>
       </section>
-
-      <Dialog
-        open={Boolean(createPlan)}
-        onOpenChange={(open) => !open && setCreatePlan(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <form onSubmit={submitCreateDraft}>
-            <DialogHeader>
-              <DialogTitle>创建{createPlan?.nameZh}编辑草稿</DialogTitle>
-              <DialogDescription>
-                系统会复制当前线上版本，创建一份可编辑的新草稿。
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-5">
-              <Label htmlFor="billing-confirm-reason">操作原因</Label>
-              <Input
-                id="billing-confirm-reason"
-                className="mt-2"
-                value={confirmReason}
-                onChange={(event) => setConfirmReason(event.target.value)}
-                placeholder="例如：根据新模型成本调整套餐额度"
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCreatePlan(null)}
-              >
-                取消
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="size-4 animate-spin" />}
-                创建草稿
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Sheet
         open={Boolean(editingPlan)}
