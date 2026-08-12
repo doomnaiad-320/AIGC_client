@@ -293,6 +293,17 @@ export type AdminBillingPlanVersion = z.infer<
   typeof adminBillingPlanVersionSchema
 >;
 
+export const adminBillingPlanStatisticsSchema = z.object({
+  workspaceCount: z.number().int().nonnegative(),
+  coveredUserCount: z.number().int().nonnegative(),
+  activeSubscriptionCount: z.number().int().nonnegative(),
+  monthlyCreditsIssued: z.number().int().nonnegative(),
+  monthlyCreditsConsumed: z.number().int().nonnegative(),
+});
+export type AdminBillingPlanStatistics = z.infer<
+  typeof adminBillingPlanStatisticsSchema
+>;
+
 export const adminBillingPlanSchema = z.object({
   id: z.string().uuid(),
   code: billingPlanCodeSchema,
@@ -302,8 +313,19 @@ export const adminBillingPlanSchema = z.object({
   isActive: z.boolean(),
   draft: adminBillingPlanVersionSchema.nullable(),
   published: adminBillingPlanVersionSchema.nullable(),
+  statistics: adminBillingPlanStatisticsSchema,
 });
 export type AdminBillingPlan = z.infer<typeof adminBillingPlanSchema>;
+
+export const adminBillingOverviewSchema = z.object({
+  workspaceCount: z.number().int().nonnegative(),
+  paidWorkspaceCount: z.number().int().nonnegative(),
+  coveredUserCount: z.number().int().nonnegative(),
+  activeSubscriptionCount: z.number().int().nonnegative(),
+  monthlyCreditsIssued: z.number().int().nonnegative(),
+  monthlyCreditsConsumed: z.number().int().nonnegative(),
+});
+export type AdminBillingOverview = z.infer<typeof adminBillingOverviewSchema>;
 
 export const adminUpdateBillingPlanDraftSchema = z.object({
   currency: z

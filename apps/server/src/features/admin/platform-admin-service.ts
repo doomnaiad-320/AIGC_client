@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type {
   AdminAgentRun,
   AdminAuditEvent,
+  AdminBillingOverview,
   AdminBillingPlan,
   AdminBillingPlanMutation,
   AdminCreditAdjustmentRequest,
@@ -117,6 +118,7 @@ export type PlatformAdminService = {
     input: AdminCreditAdjustmentRequest,
   ): Promise<AdminCreditAdjustmentResponse>;
   listBillingPlans(): Promise<AdminBillingPlan[]>;
+  getBillingOverview(): Promise<AdminBillingOverview>;
   updateBillingPlanDraft(
     actorUserId: string,
     planCode: string,
@@ -1050,6 +1052,18 @@ export function createPlatformAdminService(options: {
         throw new PlatformAdminServiceError(
           "admin_query_failed",
           "Unable to load billing plans.",
+          500,
+        );
+      }
+    },
+
+    async getBillingOverview() {
+      try {
+        return await options.billingCatalogService.getAdminOverview();
+      } catch {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load billing overview.",
           500,
         );
       }

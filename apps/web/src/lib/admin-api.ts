@@ -1,6 +1,7 @@
 import type {
   AdminAgentRun,
   AdminAuditEvent,
+  AdminBillingOverview,
   AdminBillingPlan,
   AdminBillingPlanMutation,
   AdminCreditAdjustmentRequest,
@@ -139,7 +140,7 @@ export function fetchAdminAuditEvents(accessToken: string) {
 }
 
 export function fetchAdminBillingPlans(accessToken: string) {
-  return get<{ plans: AdminBillingPlan[] }>(
+  return get<{ overview: AdminBillingOverview; plans: AdminBillingPlan[] }>(
     accessToken,
     "/api/admin/billing/plans",
   );

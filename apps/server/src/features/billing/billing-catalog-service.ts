@@ -1,4 +1,5 @@
 import type {
+  AdminBillingOverview,
   AdminBillingPlan,
   AdminBillingPlanVersion,
   BillingPlanCode,
@@ -26,6 +27,7 @@ export type RuntimePlanConfig = BillingPlanEntitlements & {
 
 export type BillingCatalogService = {
   listAdminPlans(): Promise<AdminBillingPlan[]>;
+  getAdminOverview(): Promise<AdminBillingOverview>;
   listPublishedPlans(): Promise<PublishedBillingPlan[]>;
   getRuntimePlanConfig(workspaceId: string): Promise<RuntimePlanConfig>;
 };
@@ -39,7 +41,14 @@ type CatalogRow = {
   isActive: boolean;
   draft: unknown;
   published: unknown;
+  workspaceCount: number | string;
+  coveredUserCount: number | string;
+  activeSubscriptionCount: number | string;
+  monthlyCreditsIssued: number | string;
+  monthlyCreditsConsumed: number | string;
 };
+
+type OverviewRow = Record<keyof AdminBillingOverview, number | string>;
 
 type RuntimeRow = {
   planCode: BillingPlanCode;
@@ -112,6 +121,49 @@ export function createBillingCatalogService(options: {
   return {
     async listAdminPlans() {
       const { data, error } = await options.getAdminClient().query<CatalogRow>(`
+        with current_subscriptions as (
+          select
+            subscription.id,
+            subscription.workspace_id,
+            subscription.status,
+            version.plan_id
+          from public.workspace_billing_subscriptions subscription
+          join public.billing_plan_versions version
+            on version.id = subscription.plan_version_id
+          where subscription.status in ('trialing', 'active', 'past_due', 'canceled')
+            and (
+              subscription.status <> 'canceled'
+              or subscription.current_period_end is null
+              or subscription.current_period_end > now()
+            )
+        ), plan_statistics as (
+          select
+            current_subscription.plan_id,
+            count(distinct current_subscription.workspace_id)::int as workspace_count,
+            count(distinct member.user_id)::int as covered_user_count,
+            count(distinct current_subscription.id) filter (
+              where current_subscription.status in ('trialing', 'active')
+            )::int as active_subscription_count
+          from current_subscriptions current_subscription
+          left join public.workspace_members member
+            on member.workspace_id = current_subscription.workspace_id
+          group by current_subscription.plan_id
+        ), monthly_credit_statistics as (
+          select
+            current_subscription.plan_id,
+            coalesce(sum(ledger.amount) filter (
+              where ledger.entry_type in ('grant', 'admin_adjustment')
+                and ledger.amount > 0
+            ), 0)::bigint as monthly_credits_issued,
+            coalesce(sum(-ledger.amount) filter (
+              where ledger.entry_type = 'deduct' and ledger.amount < 0
+            ), 0)::bigint as monthly_credits_consumed
+          from current_subscriptions current_subscription
+          join public.credit_ledger ledger
+            on ledger.workspace_id = current_subscription.workspace_id
+            and ledger.created_at >= date_trunc('month', now())
+          group by current_subscription.plan_id
+        )
         select
           plan.id,
           plan.code,
@@ -119,6 +171,11 @@ export function createBillingCatalogService(options: {
           plan.description_zh as "descriptionZh",
           plan.is_public as "isPublic",
           plan.is_active as "isActive",
+          coalesce(plan_statistics.workspace_count, 0)::int as "workspaceCount",
+          coalesce(plan_statistics.covered_user_count, 0)::int as "coveredUserCount",
+          coalesce(plan_statistics.active_subscription_count, 0)::int as "activeSubscriptionCount",
+          coalesce(monthly_credit_statistics.monthly_credits_issued, 0)::bigint as "monthlyCreditsIssued",
+          coalesce(monthly_credit_statistics.monthly_credits_consumed, 0)::bigint as "monthlyCreditsConsumed",
           (
             select jsonb_build_object(
               'id', version.id,
@@ -169,6 +226,8 @@ export function createBillingCatalogService(options: {
             limit 1
           ) as published
         from public.billing_plans plan
+        left join plan_statistics on plan_statistics.plan_id = plan.id
+        left join monthly_credit_statistics on monthly_credit_statistics.plan_id = plan.id
         order by case plan.code
           when 'free' then 1
           when 'pro' then 2
@@ -181,10 +240,96 @@ export function createBillingCatalogService(options: {
         throw new Error(`Unable to load billing catalog: ${error.message}`);
 
       return (data ?? []).map((row) => ({
-        ...row,
+        id: row.id,
+        code: row.code,
+        nameZh: row.nameZh,
+        descriptionZh: row.descriptionZh,
+        isPublic: row.isPublic,
+        isActive: row.isActive,
         draft: parseVersion(row.code, row.draft),
         published: parseVersion(row.code, row.published),
+        statistics: {
+          workspaceCount: Number(row.workspaceCount),
+          coveredUserCount: Number(row.coveredUserCount),
+          activeSubscriptionCount: Number(row.activeSubscriptionCount),
+          monthlyCreditsIssued: Number(row.monthlyCreditsIssued),
+          monthlyCreditsConsumed: Number(row.monthlyCreditsConsumed),
+        },
       }));
+    },
+
+    async getAdminOverview() {
+      const { data, error } = await options
+        .getAdminClient()
+        .query<OverviewRow>(`
+        with current_subscriptions as (
+          select
+            subscription.id,
+            subscription.workspace_id,
+            subscription.status,
+            plan.code
+          from public.workspace_billing_subscriptions subscription
+          join public.billing_plan_versions version
+            on version.id = subscription.plan_version_id
+          join public.billing_plans plan on plan.id = version.plan_id
+          where subscription.status in ('trialing', 'active', 'past_due', 'canceled')
+            and (
+              subscription.status <> 'canceled'
+              or subscription.current_period_end is null
+              or subscription.current_period_end > now()
+            )
+        ), subscription_totals as (
+          select
+            count(distinct current_subscription.workspace_id)::int as workspace_count,
+            count(distinct current_subscription.workspace_id) filter (
+              where current_subscription.code in ('pro', 'team', 'enterprise')
+            )::int as paid_workspace_count,
+            count(distinct member.user_id)::int as covered_user_count,
+            count(distinct current_subscription.id) filter (
+              where current_subscription.status in ('trialing', 'active')
+            )::int as active_subscription_count
+          from current_subscriptions current_subscription
+          left join public.workspace_members member
+            on member.workspace_id = current_subscription.workspace_id
+        ), credit_totals as (
+          select
+            coalesce(sum(ledger.amount) filter (
+              where ledger.entry_type in ('grant', 'admin_adjustment')
+                and ledger.amount > 0
+            ), 0)::bigint as monthly_credits_issued,
+            coalesce(sum(-ledger.amount) filter (
+              where ledger.entry_type = 'deduct' and ledger.amount < 0
+            ), 0)::bigint as monthly_credits_consumed
+          from current_subscriptions current_subscription
+          join public.credit_ledger ledger
+            on ledger.workspace_id = current_subscription.workspace_id
+          where ledger.created_at >= date_trunc('month', now())
+        )
+        select
+          subscription_totals.workspace_count as "workspaceCount",
+          subscription_totals.paid_workspace_count as "paidWorkspaceCount",
+          subscription_totals.covered_user_count as "coveredUserCount",
+          subscription_totals.active_subscription_count as "activeSubscriptionCount",
+          credit_totals.monthly_credits_issued as "monthlyCreditsIssued",
+          credit_totals.monthly_credits_consumed as "monthlyCreditsConsumed"
+        from subscription_totals cross join credit_totals
+      `);
+
+      if (error || !data?.[0]) {
+        throw new Error(
+          `Unable to load billing overview: ${error?.message ?? "no result"}`,
+        );
+      }
+
+      const row = data[0];
+      return {
+        workspaceCount: Number(row.workspaceCount),
+        paidWorkspaceCount: Number(row.paidWorkspaceCount),
+        coveredUserCount: Number(row.coveredUserCount),
+        activeSubscriptionCount: Number(row.activeSubscriptionCount),
+        monthlyCreditsIssued: Number(row.monthlyCreditsIssued),
+        monthlyCreditsConsumed: Number(row.monthlyCreditsConsumed),
+      };
     },
 
     async listPublishedPlans() {

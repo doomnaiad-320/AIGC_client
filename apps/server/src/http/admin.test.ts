@@ -47,6 +47,22 @@ const billingPlan = {
   isPublic: true,
   nameZh: "专业版",
   published: null,
+  statistics: {
+    activeSubscriptionCount: 1,
+    coveredUserCount: 1,
+    monthlyCreditsConsumed: 120,
+    monthlyCreditsIssued: 5000,
+    workspaceCount: 1,
+  },
+};
+
+const billingOverview = {
+  activeSubscriptionCount: 1,
+  coveredUserCount: 1,
+  monthlyCreditsConsumed: 120,
+  monthlyCreditsIssued: 5000,
+  paidWorkspaceCount: 1,
+  workspaceCount: 1,
 };
 
 function makeService(isAdmin: boolean): PlatformAdminService {
@@ -119,6 +135,7 @@ function makeService(isAdmin: boolean): PlatformAdminService {
       transactionId: "22222222-2222-4222-8222-222222222222",
     }),
     listBillingPlans: vi.fn().mockResolvedValue([billingPlan]),
+    getBillingOverview: vi.fn().mockResolvedValue(billingOverview),
     updateBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
     createBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
     publishBillingPlan: vi.fn().mockResolvedValue([billingPlan]),
@@ -416,6 +433,30 @@ describe("admin routes", () => {
       "pro",
       input,
     );
+    await app.close();
+  });
+
+  it("returns plan configuration together with billing statistics", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/billing/plans",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      overview: billingOverview,
+      plans: [
+        {
+          code: "pro",
+          statistics: billingPlan.statistics,
+        },
+      ],
+    });
+    expect(service.getBillingOverview).toHaveBeenCalledOnce();
     await app.close();
   });
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   adminAgentRunSchema,
   adminAuditEventSchema,
+  adminBillingOverviewSchema,
   adminBillingPlanMutationSchema,
   adminBillingPlanSchema,
   adminCreditAdjustmentRequestSchema,
@@ -356,8 +357,12 @@ export async function registerAdminRoutes(
     try {
       const user = await requirePlatformAdmin(request, reply, options);
       if (!user) return;
-      const plans = await options.adminService.listBillingPlans();
+      const [plans, overview] = await Promise.all([
+        options.adminService.listBillingPlans(),
+        options.adminService.getBillingOverview(),
+      ]);
       return reply.code(200).send({
+        overview: adminBillingOverviewSchema.parse(overview),
         plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
       });
     } catch (error) {
