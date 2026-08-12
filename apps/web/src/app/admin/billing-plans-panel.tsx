@@ -10,11 +10,20 @@ import {
   FilePenLine,
   Loader2,
   RefreshCw,
+  Rocket,
   RotateCcw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,6 +37,7 @@ import {
 import {
   createAdminBillingPlanDraft,
   fetchAdminBillingPlans,
+  publishAdminBillingPlan,
   updateAdminBillingPlanDraft,
 } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
@@ -42,6 +52,10 @@ export function BillingPlansPanel({ accessToken }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [publishingPlan, setPublishingPlan] = useState<AdminBillingPlan | null>(
+    null,
+  );
+  const [publishReason, setPublishReason] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,6 +96,14 @@ export function BillingPlansPanel({ accessToken }: Props) {
   function closeEditor() {
     setEditingPlan(null);
     setForm(null);
+  }
+
+  function openPublish(plan: AdminBillingPlan) {
+    if (!plan.draft) return;
+    setError(null);
+    setSuccess(null);
+    setPublishingPlan(plan);
+    setPublishReason("");
   }
 
   async function saveDraft(event: React.FormEvent<HTMLFormElement>) {
@@ -129,6 +151,39 @@ export function BillingPlansPanel({ accessToken }: Props) {
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "无法保存套餐草稿。",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function publishDraft(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!publishingPlan || publishReason.trim().length < 3) {
+      setError("请填写至少 3 个字的发布原因。该原因会进入审计日志。");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await publishAdminBillingPlan(
+        accessToken,
+        publishingPlan.code,
+        { reason: publishReason.trim() },
+      );
+      setPlans(result.plans);
+      if (editingPlan?.code === publishingPlan.code) {
+        closeEditor();
+      }
+      setPublishingPlan(null);
+      setPublishReason("");
+      setSuccess(`${publishingPlan.nameZh}已发布，新配置现在开始生效。`);
+    } catch (publishError) {
+      setError(
+        publishError instanceof Error
+          ? publishError.message
+          : "无法发布套餐版本。",
       );
     } finally {
       setSaving(false);
@@ -220,16 +275,28 @@ export function BillingPlansPanel({ accessToken }: Props) {
                         published={plan.published}
                       />
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditor(plan)}
-                      >
-                        <FilePenLine className="size-4" />
-                        编辑
-                      </Button>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditor(plan)}
+                        >
+                          <FilePenLine className="size-4" />
+                          编辑
+                        </Button>
+                        {plan.draft && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => openPublish(plan)}
+                          >
+                            <Rocket className="size-4" />
+                            发布
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -238,6 +305,45 @@ export function BillingPlansPanel({ accessToken }: Props) {
           </tbody>
         </table>
       </section>
+
+      <Dialog
+        open={Boolean(publishingPlan)}
+        onOpenChange={(open) => !open && setPublishingPlan(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={publishDraft}>
+            <DialogHeader>
+              <DialogTitle>发布{publishingPlan?.nameZh}版本</DialogTitle>
+              <DialogDescription>
+                发布后该草稿将成为线上生效版本，后续修改需要创建新的草稿。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-5">
+              <Label htmlFor="billing-publish-reason">发布原因</Label>
+              <Input
+                id="billing-publish-reason"
+                className="mt-2"
+                value={publishReason}
+                onChange={(event) => setPublishReason(event.target.value)}
+                placeholder="例如：完成本轮套餐权益调整"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPublishingPlan(null)}
+              >
+                取消
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                确认发布
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Sheet
         open={Boolean(editingPlan)}
