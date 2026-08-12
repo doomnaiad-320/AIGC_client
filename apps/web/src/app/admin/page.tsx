@@ -126,7 +126,7 @@ const tabs: Array<{
   {
     id: "ledger",
     label: "点数流水",
-    description: "查看点数发放、消耗、退还与人工调整记录。",
+    description: "查看点数发放、消耗、退还与人工加点记录。",
     icon: Coins,
   },
   {
@@ -517,12 +517,12 @@ export default function AdminPage() {
     if (!token || !adjustedUser || !workspaceId) return;
 
     const amount = Number(adjustmentAmount);
-    if (!Number.isInteger(amount) || amount === 0) {
-      setAdjustmentError("请输入非零整数作为调整数额。");
+    if (!Number.isInteger(amount) || amount < 1 || amount > 500_000) {
+      setAdjustmentError("请输入 1 至 500,000 之间的整数。");
       return;
     }
     if (adjustmentReason.trim().length < 3) {
-      setAdjustmentError("请填写本次点数调整的原因。");
+      setAdjustmentError("请填写本次增加点数的原因。");
       return;
     }
 
@@ -543,7 +543,7 @@ export default function AdminPage() {
       }
     } catch (saveError) {
       setAdjustmentError(
-        saveError instanceof Error ? saveError.message : "无法调整点数。",
+        saveError instanceof Error ? saveError.message : "无法增加点数。",
       );
     } finally {
       setSavingAdjustment(false);
@@ -693,7 +693,7 @@ export default function AdminPage() {
               alert
             />
             <Stat
-              label="人工调点 · 24 小时"
+              label="人工加点 · 24 小时"
               value={overview?.adjustments24h}
               icon={CircleDollarSign}
             />
@@ -714,9 +714,6 @@ export default function AdminPage() {
                   setAdjustingUser(user);
                 }}
                 onEdit={openEditUser}
-                onStatus={openStatusUser}
-                onReset={openResetUser}
-                onAdmin={openPlatformAdminMutation}
               />
             )}
             {tab === "workspaces" && (
@@ -775,9 +772,9 @@ export default function AdminPage() {
         <DialogContent className="gap-0 rounded-lg p-0 sm:max-w-lg">
           <form onSubmit={submitAdjustment}>
             <DialogHeader className="border-b px-6 py-5 pr-14">
-              <DialogTitle>调整点数</DialogTitle>
+              <DialogTitle>增加点数</DialogTitle>
               <DialogDescription>
-                为该用户创建一笔可审计的余额调整记录。
+                为该用户增加点数，并创建一笔可审计的余额流水。
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-5 px-6 py-5">
@@ -795,19 +792,19 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="admin-credit-amount">调整数量</Label>
+                <Label htmlFor="admin-credit-amount">增加数量</Label>
                 <Input
                   id="admin-credit-amount"
                   inputMode="numeric"
                   max="500000"
-                  min="-500000"
+                  min="1"
                   onChange={(event) => setAdjustmentAmount(event.target.value)}
-                  placeholder="例如 500 或 -100"
+                  placeholder="例如 500"
                   type="number"
                   value={adjustmentAmount}
                 />
                 <p className="text-xs text-muted-foreground">
-                  正数表示增加点数，负数表示扣除点数。
+                  请输入 1 至 500,000 之间的整数。
                 </p>
               </div>
               <div className="space-y-2">
@@ -817,7 +814,7 @@ export default function AdminPage() {
                   className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   maxLength={500}
                   onChange={(event) => setAdjustmentReason(event.target.value)}
-                  placeholder="请说明本次调整的原因"
+                  placeholder="请说明本次增加点数的原因"
                   value={adjustmentReason}
                 />
               </div>
@@ -843,7 +840,7 @@ export default function AdminPage() {
                 {savingAdjustment && (
                   <Loader2 data-icon="inline-start" className="animate-spin" />
                 )}
-                确认调整
+                确认增加
               </Button>
             </DialogFooter>
           </form>
@@ -912,9 +909,6 @@ export default function AdminPage() {
           setAdjustingUser(user);
         }}
         onEdit={openEditUser}
-        onStatus={openStatusUser}
-        onReset={openResetUser}
-        onAdmin={openPlatformAdminMutation}
       />
 
       <WorkspaceDetailDialog
@@ -987,9 +981,6 @@ function UsersTable({
   onView,
   onAdjust,
   onEdit,
-  onStatus,
-  onReset,
-  onAdmin,
 }: {
   users: AdminUser[];
   loading: boolean;
@@ -1000,9 +991,6 @@ function UsersTable({
   onView: (user: AdminUser) => void;
   onAdjust: (user: AdminUser) => void;
   onEdit: (user: AdminUser) => void;
-  onStatus: (user: AdminUser) => void;
-  onReset: (user: AdminUser) => void;
-  onAdmin: (user: AdminUser) => void;
 }) {
   return (
     <>
@@ -1063,7 +1051,12 @@ function UsersTable({
               users.map((user) => (
                 <tr key={user.id} className="hover:bg-muted/40">
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="flex max-w-full items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => onView(user)}
+                      aria-label={`查看 ${user.displayName} 的详情`}
+                    >
                       <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                         {initials(user.displayName, user.email)}
                       </span>
@@ -1081,7 +1074,7 @@ function UsersTable({
                           {user.email}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {user.workspaceName ?? "—"}
@@ -1101,16 +1094,7 @@ function UsersTable({
                       : "从未登录"}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => onView(user)}
-                        aria-label="查看用户详情"
-                        title="查看详情"
-                      >
-                        <Eye />
-                      </Button>
+                    <div className="flex justify-end gap-1.5">
                       <Button
                         size="icon-sm"
                         variant="ghost"
@@ -1120,52 +1104,13 @@ function UsersTable({
                       >
                         <Pencil />
                       </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => onStatus(user)}
-                        aria-label={
-                          user.status === "active" ? "暂停用户" : "恢复用户"
-                        }
-                        title={
-                          user.status === "active" ? "暂停用户" : "恢复用户"
-                        }
-                      >
-                        {user.status === "active" ? <PauseCircle /> : <Check />}
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => onReset(user)}
-                        aria-label="重置用户密码"
-                        title="重置密码"
-                      >
-                        <KeyRound />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        onClick={() => onAdmin(user)}
-                        aria-label={
-                          user.isPlatformAdmin
-                            ? "撤销平台管理员权限"
-                            : "授予平台管理员权限"
-                        }
-                        title={
-                          user.isPlatformAdmin
-                            ? "撤销平台管理员"
-                            : "设为平台管理员"
-                        }
-                      >
-                        {user.isPlatformAdmin ? <ShieldOff /> : <ShieldCheck />}
-                      </Button>
                       {user.workspaceId ? (
                         <Button
                           size="icon-sm"
                           variant="ghost"
                           onClick={() => onAdjust(user)}
-                          aria-label="调整用户点数"
-                          title="调整点数"
+                          aria-label="增加用户点数"
+                          title="增加点数"
                         >
                           <Coins />
                         </Button>
@@ -1481,7 +1426,7 @@ function LedgerTable({
   return (
     <TableFrame
       title="点数流水"
-      subtitle="仅追加记录点数发放、消耗、退还与人工调整。"
+      subtitle="仅追加记录点数发放、消耗、退还与人工加点。"
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[780px] text-left text-sm">
@@ -1983,9 +1928,6 @@ function UserDetailDialog({
   onClose,
   onAdjust,
   onEdit,
-  onStatus,
-  onReset,
-  onAdmin,
 }: {
   detail: AdminUserDetail | null;
   loading: boolean;
@@ -1993,9 +1935,6 @@ function UserDetailDialog({
   onClose: () => void;
   onAdjust: (user: AdminUser) => void;
   onEdit: (user: AdminUser) => void;
-  onStatus: (user: AdminUser) => void;
-  onReset: (user: AdminUser) => void;
-  onAdmin: (user: AdminUser) => void;
 }) {
   const user = detail?.user;
 
@@ -2092,42 +2031,10 @@ function UserDetailDialog({
                 <Pencil data-icon="inline-start" />
                 编辑资料
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onStatus(user)}
-              >
-                {user.status === "active" ? (
-                  <PauseCircle data-icon="inline-start" />
-                ) : (
-                  <Check data-icon="inline-start" />
-                )}
-                {user.status === "active" ? "暂停用户" : "恢复用户"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onReset(user)}
-              >
-                <KeyRound data-icon="inline-start" />
-                重置密码
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onAdmin(user)}
-              >
-                {user.isPlatformAdmin ? (
-                  <ShieldOff data-icon="inline-start" />
-                ) : (
-                  <ShieldCheck data-icon="inline-start" />
-                )}
-                {user.isPlatformAdmin ? "撤销管理员" : "设为管理员"}
-              </Button>
               {user.workspaceId && (
                 <Button type="button" onClick={() => onAdjust(user)}>
                   <Coins data-icon="inline-start" />
-                  调整点数
+                  增加点数
                 </Button>
               )}
             </div>
@@ -2665,7 +2572,7 @@ function transactionTypeLabel(type: string) {
         purchase: "购买点数",
         generation_deduct: "生成扣除",
         generation_refund: "生成退还",
-        admin_adjustment: "人工调整",
+        admin_adjustment: "人工加点",
         bonus: "奖励点数",
       } as Record<string, string>
     )[type] ?? "其他变动"
@@ -2681,7 +2588,7 @@ function auditActionLabel(action: string) {
         "user.password_reset_issued": "生成密码重置令牌",
         "platform_admin.granted": "授予平台管理员权限",
         "platform_admin.revoked": "撤销平台管理员权限",
-        "credits.adjusted": "人工调整点数",
+        "credits.adjusted": "人工增加点数",
       } as Record<string, string>
     )[action] ?? "其他管理员操作"
   );

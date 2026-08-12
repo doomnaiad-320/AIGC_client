@@ -31,7 +31,7 @@ const ADMIN_ERROR_MESSAGES: Record<string, string> = {
   admin_user_status_update_failed: "无法更新用户状态。",
   admin_password_reset_failed: "无法生成密码重置令牌。",
   admin_platform_admin_update_failed: "无法更新平台管理员权限。",
-  credit_adjustment_failed: "无法调整点数，请检查余额与调整数量。",
+  credit_adjustment_failed: "无法增加点数，请检查增加数量。",
   admin_request_failed: "管理后台请求失败，请稍后重试。",
 };
 

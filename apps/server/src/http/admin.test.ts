@@ -284,4 +284,26 @@ describe("admin routes", () => {
     expect(response.json().runs).toHaveLength(1);
     await app.close();
   });
+
+  it("rejects non-positive administrator credit grants", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/credit-adjustments",
+      payload: {
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        targetUserId: "22222222-2222-4222-8222-222222222222",
+        amount: -100,
+        reason: "Invalid manual deduction",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(service.adjustCredits).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

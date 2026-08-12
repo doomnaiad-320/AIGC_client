@@ -221,12 +221,7 @@ export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 export const adminCreditAdjustmentRequestSchema = z.object({
   workspaceId: z.string().uuid(),
   targetUserId: z.string().uuid(),
-  amount: z
-    .number()
-    .int()
-    .min(-500_000)
-    .max(500_000)
-    .refine((value) => value !== 0),
+  amount: z.number().int().min(1).max(500_000),
   reason: z.string().trim().min(3).max(500),
 });
 export type AdminCreditAdjustmentRequest = z.infer<

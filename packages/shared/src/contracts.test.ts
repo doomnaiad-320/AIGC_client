@@ -5,6 +5,7 @@ import type { ZodType } from "zod";
 
 import {
   type Database,
+  adminCreditAdjustmentRequestSchema,
   adminPasswordResetRequestSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
@@ -543,6 +544,33 @@ describe("@loomic/shared contracts", () => {
       adminUpdateUserStatusRequestSchema.safeParse({
         reason: "Policy review",
         status: "blocked",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts only positive administrator credit grants", () => {
+    const baseInput = {
+      workspaceId: "33333333-3333-4333-8333-333333333333",
+      targetUserId: "22222222-2222-4222-8222-222222222222",
+      reason: "Customer support grant",
+    };
+
+    expect(
+      adminCreditAdjustmentRequestSchema.safeParse({
+        ...baseInput,
+        amount: 500,
+      }).success,
+    ).toBe(true);
+    expect(
+      adminCreditAdjustmentRequestSchema.safeParse({
+        ...baseInput,
+        amount: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      adminCreditAdjustmentRequestSchema.safeParse({
+        ...baseInput,
+        amount: -100,
       }).success,
     ).toBe(false);
   });
