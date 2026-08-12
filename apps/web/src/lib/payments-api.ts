@@ -2,7 +2,7 @@
 import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
 
 import { getServerBaseUrl } from "./env";
-import { ApiAuthError, ApiApplicationError } from "./server-api";
+import { ApiApplicationError, ApiAuthError } from "./server-api";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -35,7 +35,14 @@ async function handleErrorResponse(response: Response): Promise<never> {
   }
   const body = await response.json().catch(() => null);
   const code = body?.error?.code ?? "application_error";
-  const message = body?.error?.message ?? "Request failed";
+  const messages: Record<string, string> = {
+    payment_not_configured: "支付服务尚未配置，请联系平台管理员完成商户设置。",
+    variant_not_found: "当前套餐的支付价格尚未配置。",
+    subscription_not_found: "未找到有效订阅。",
+    subscription_update_failed: "无法更新订阅，请稍后重试。",
+  };
+  const message =
+    messages[code] ?? body?.error?.message ?? "支付请求失败，请稍后重试。";
   throw new ApiApplicationError(code, message);
 }
 
@@ -66,9 +73,7 @@ export async function getSubscription(
   return (await response.json()) as SubscriptionStatus;
 }
 
-export async function cancelSubscription(
-  accessToken: string,
-): Promise<void> {
+export async function cancelSubscription(accessToken: string): Promise<void> {
   const response = await fetch(`${getServerBaseUrl()}/api/payments/cancel`, {
     method: "POST",
     headers: authHeaders(accessToken),

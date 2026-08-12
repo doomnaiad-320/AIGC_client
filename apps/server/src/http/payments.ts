@@ -1,19 +1,19 @@
-// @credits-system — Payment API routes: checkout, subscription status, plan change, cancellation
-import type { FastifyInstance, FastifyReply } from "fastify";
 import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
 import {
-  subscriptionPlanSchema,
-  billingPeriodSchema,
   applicationErrorResponseSchema,
+  billingPeriodSchema,
+  subscriptionPlanSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
+// @credits-system — Payment API routes: checkout, subscription status, plan change, cancellation
+import type { FastifyInstance, FastifyReply } from "fastify";
 
-import {
-  PaymentServiceError,
-  type PaymentService,
-} from "../features/payments/payment-service.js";
-import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import type { RequestAuthenticator } from "../auth/user.js";
+import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
+import {
+  type PaymentService,
+  PaymentServiceError,
+} from "../features/payments/payment-service.js";
 
 export async function registerPaymentRoutes(
   app: FastifyInstance,
@@ -128,8 +128,7 @@ export async function registerPaymentRoutes(
           applicationErrorResponseSchema.parse({
             error: {
               code: "invalid_request",
-              message:
-                "Cannot change to the free plan. Use cancel instead.",
+              message: "Cannot change to the free plan. Use cancel instead.",
             },
           }),
         );
@@ -147,6 +146,24 @@ export async function registerPaymentRoutes(
       return sendPaymentError(error, reply, "subscription_update_failed");
     }
   });
+}
+
+export async function registerPaymentUnavailableRoutes(app: FastifyInstance) {
+  const unavailable = (_request: unknown, reply: FastifyReply) =>
+    reply.code(503).send(
+      applicationErrorResponseSchema.parse({
+        error: {
+          code: "payment_not_configured",
+          message:
+            "Payment service is not configured. Add the Lemon Squeezy store, API key, webhook secret, and plan variant IDs.",
+        },
+      }),
+    );
+
+  app.post("/api/payments/checkout", unavailable);
+  app.get("/api/payments/subscription", unavailable);
+  app.post("/api/payments/cancel", unavailable);
+  app.post("/api/payments/change-plan", unavailable);
 }
 
 // ── Helpers ──────────────────────────────────────────────────

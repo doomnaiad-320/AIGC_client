@@ -125,7 +125,10 @@ export const applicationErrorCodeSchema = z.enum([
   "resolution_not_allowed",
   "concurrency_limit",
   "variant_not_found",
+  "payment_not_configured",
   "checkout_failed",
+  "subscription_not_found",
+  "subscription_update_failed",
   "generation_failed",
 ]);
 
@@ -200,8 +203,12 @@ export type CanvasGetResponse = z.infer<typeof canvasGetResponseSchema>;
 export type CanvasSaveRequest = z.infer<typeof canvasSaveRequestSchema>;
 export type CanvasSaveResponse = z.infer<typeof canvasSaveResponseSchema>;
 export type ProfileUpdateResponse = z.infer<typeof profileUpdateResponseSchema>;
-export type WorkspaceSettingsResponse = z.infer<typeof workspaceSettingsResponseSchema>;
-export type WorkspaceSettingsUpdateRequest = z.infer<typeof workspaceSettingsUpdateRequestSchema>;
+export type WorkspaceSettingsResponse = z.infer<
+  typeof workspaceSettingsResponseSchema
+>;
+export type WorkspaceSettingsUpdateRequest = z.infer<
+  typeof workspaceSettingsUpdateRequestSchema
+>;
 export type ModelListResponse = z.infer<typeof modelListResponseSchema>;
 
 export const uploadResponseSchema = z.object({
@@ -214,7 +221,9 @@ export const assetSignedUrlResponseSchema = z.object({
 });
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
-export type AssetSignedUrlResponse = z.infer<typeof assetSignedUrlResponseSchema>;
+export type AssetSignedUrlResponse = z.infer<
+  typeof assetSignedUrlResponseSchema
+>;
 
 export const projectUpdateRequestSchema = z.object({
   brand_kit_id: z.string().uuid().nullable().optional(),

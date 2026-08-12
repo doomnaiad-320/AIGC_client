@@ -1,110 +1,117 @@
-import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
+import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 
 import type { LoomicAgentFactory } from "./agent/deep-agent.js";
 import {
-  createAgentPersistenceService,
   type AgentPersistenceService,
+  createAgentPersistenceService,
 } from "./agent/persistence/index.js";
 import { createAgentRunService } from "./agent/runtime.js";
-import { registerAllProviders } from "./generation/providers/register-all.js";
 import {
-  createViewerService,
-  type ViewerService,
-} from "./features/bootstrap/ensure-user-foundation.js";
-import {
-  createCanvasService,
-  type CanvasService,
-} from "./features/canvas/canvas-service.js";
-import {
-  createBrandKitService,
-  type BrandKitService,
-} from "./features/brand-kit/brand-kit-service.js";
-import {
-  createProjectService,
-  type ProjectService,
-} from "./features/projects/project-service.js";
-import {
-  createChatService,
-  type ChatService,
-} from "./features/chat/chat-service.js";
-import {
-  createThreadService,
-  type ThreadService,
-} from "./features/chat/thread-service.js";
-import {
-  createAgentRunMetadataService,
-  type AgentRunMetadataService,
-} from "./features/agent-runs/agent-run-service.js";
-import {
-  createSettingsService,
-  type SettingsService,
-} from "./features/settings/settings-service.js";
-import {
-  createUploadService,
-  type UploadService,
-} from "./features/uploads/upload-service.js";
-import { type ServerEnv, loadServerEnv, resolveDefaultAgentModel } from "./config/env.js";
-import { createPgmqClient } from "./queue/pgmq-client.js";
-import { getDatabaseUrl } from "./db/postgres.js";
-import {
-  createCreditService,
-  type CreditService,
-} from "./features/credits/credit-service.js";
-import {
-  createTierGuard,
-  type TierGuard,
-} from "./features/credits/tier-guard.js";
-import {
-  createPlatformAdminService,
-  type PlatformAdminService,
-} from "./features/admin/platform-admin-service.js";
-import {
-  createJobService,
-  type JobService,
-} from "./features/jobs/job-service.js";
-import { createLemonSqueezyClient } from "./features/payments/lemon-squeezy-client.js";
-import {
-  createPaymentService,
-  buildVariantMap,
-  type PaymentService,
-} from "./features/payments/payment-service.js";
-import { registerPaymentRoutes } from "./http/payments.js";
-import { registerPaymentWebhookRoute } from "./http/payments-webhook.js";
-import { registerCreditRoutes } from "./http/credits.js";
-import { registerFontsRoutes } from "./http/fonts.js";
-import { registerJobRoutes } from "./http/jobs.js";
-import { registerBrandKitRoutes } from "./http/brand-kits.js";
-import { registerCanvasRoutes } from "./http/canvases.js";
-import { registerChatRoutes } from "./http/chat.js";
-import { registerGenerateRoutes } from "./http/generate.js";
-import { registerHealthRoutes } from "./http/health.js";
-import { registerAuthRoutes } from "./http/auth.js";
-import { registerImageProxyRoute } from "./http/image-proxy.js";
-import { registerModelRoutes } from "./http/models.js";
-import { registerImageModelRoutes } from "./http/image-models.js";
-import { registerVideoModelRoutes } from "./http/video-models.js";
-import { registerProjectRoutes } from "./http/projects.js";
-import { registerRunRoutes } from "./http/runs.js";
-import { registerSettingsRoutes } from "./http/settings.js";
-import { registerUploadRoutes } from "./http/uploads.js";
-import { registerSkillRoutes } from "./http/skills.js";
-import { registerMarketplaceRoutes } from "./http/skills-marketplace.js";
-import { registerViewerRoutes } from "./http/viewer.js";
-import { registerAdminRoutes } from "./http/admin.js";
-import { CanvasEventBuffer } from "./ws/event-buffer.js";
-import { ConnectionManager } from "./ws/connection-manager.js";
-import { registerWsRoute } from "./ws/handler.js";
-import { createAdminDbClient } from "./db/client.js";
-import { registerLocalStorageRoutes } from "./db/storage.js";
-import {
+  type RequestAuthenticator,
   createRequestAuthenticator,
   createUserDbClientFactory,
   invalidateAuthCacheForUser,
-  type RequestAuthenticator,
 } from "./auth/user.js";
+import {
+  type ServerEnv,
+  loadServerEnv,
+  resolveDefaultAgentModel,
+} from "./config/env.js";
+import { createAdminDbClient } from "./db/client.js";
+import { getDatabaseUrl } from "./db/postgres.js";
+import { registerLocalStorageRoutes } from "./db/storage.js";
+import {
+  type PlatformAdminService,
+  createPlatformAdminService,
+} from "./features/admin/platform-admin-service.js";
+import {
+  type AgentRunMetadataService,
+  createAgentRunMetadataService,
+} from "./features/agent-runs/agent-run-service.js";
+import {
+  type ViewerService,
+  createViewerService,
+} from "./features/bootstrap/ensure-user-foundation.js";
+import {
+  type BrandKitService,
+  createBrandKitService,
+} from "./features/brand-kit/brand-kit-service.js";
+import {
+  type CanvasService,
+  createCanvasService,
+} from "./features/canvas/canvas-service.js";
+import {
+  type ChatService,
+  createChatService,
+} from "./features/chat/chat-service.js";
+import {
+  type ThreadService,
+  createThreadService,
+} from "./features/chat/thread-service.js";
+import {
+  type CreditService,
+  createCreditService,
+} from "./features/credits/credit-service.js";
+import {
+  type TierGuard,
+  createTierGuard,
+} from "./features/credits/tier-guard.js";
+import {
+  type JobService,
+  createJobService,
+} from "./features/jobs/job-service.js";
+import { createLemonSqueezyClient } from "./features/payments/lemon-squeezy-client.js";
+import {
+  type PaymentService,
+  buildVariantMap,
+  createPaymentService,
+} from "./features/payments/payment-service.js";
+import {
+  type ProjectService,
+  createProjectService,
+} from "./features/projects/project-service.js";
+import {
+  type SettingsService,
+  createSettingsService,
+} from "./features/settings/settings-service.js";
+import {
+  type UploadService,
+  createUploadService,
+} from "./features/uploads/upload-service.js";
+import { registerAllProviders } from "./generation/providers/register-all.js";
+import { registerAdminRoutes } from "./http/admin.js";
+import { registerAuthRoutes } from "./http/auth.js";
+import { registerBrandKitRoutes } from "./http/brand-kits.js";
+import { registerCanvasRoutes } from "./http/canvases.js";
+import { registerChatRoutes } from "./http/chat.js";
+import { registerCreditRoutes } from "./http/credits.js";
+import { registerFontsRoutes } from "./http/fonts.js";
+import { registerGenerateRoutes } from "./http/generate.js";
+import { registerHealthRoutes } from "./http/health.js";
+import { registerImageModelRoutes } from "./http/image-models.js";
+import { registerImageProxyRoute } from "./http/image-proxy.js";
+import { registerJobRoutes } from "./http/jobs.js";
+import { registerModelRoutes } from "./http/models.js";
+import { registerPaymentWebhookRoute } from "./http/payments-webhook.js";
+import {
+  registerPaymentRoutes,
+  registerPaymentUnavailableRoutes,
+} from "./http/payments.js";
+import { registerProjectRoutes } from "./http/projects.js";
+import { registerRunRoutes } from "./http/runs.js";
+import { registerSettingsRoutes } from "./http/settings.js";
+import { registerMarketplaceRoutes } from "./http/skills-marketplace.js";
+import { registerSkillRoutes } from "./http/skills.js";
+import { registerUploadRoutes } from "./http/uploads.js";
+import { registerVideoModelRoutes } from "./http/video-models.js";
+import { registerViewerRoutes } from "./http/viewer.js";
+import { createPgmqClient } from "./queue/pgmq-client.js";
+import { ConnectionManager } from "./ws/connection-manager.js";
+import { CanvasEventBuffer } from "./ws/event-buffer.js";
+import { registerWsRoute } from "./ws/handler.js";
 
 export type BuildAppOptions = {
   agentFactory?: LoomicAgentFactory;
@@ -157,9 +164,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   });
   const createUserClient = createUserDbClientFactory(env);
-  let adminClient:
-    | ReturnType<typeof createAdminDbClient>
-    | undefined;
+  let adminClient: ReturnType<typeof createAdminDbClient> | undefined;
   const getAdminClient = () => {
     adminClient ??= createAdminDbClient(env);
     return adminClient;
@@ -178,7 +183,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const threadService =
     options.threadService ?? createThreadService({ createUserClient });
   const chatService =
-    options.chatService ?? createChatService({ createUserClient, threadService });
+    options.chatService ??
+    createChatService({ createUserClient, threadService });
   const agentRunMetadataService =
     options.agentRunMetadataService ??
     createAgentRunMetadataService({ getAdminClient });
@@ -186,16 +192,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     options.agentPersistenceService ?? createAgentPersistenceService(env);
   const settingsService =
     options.settingsService ??
-      createSettingsService({
-        createUserClient,
-        defaultModel: resolveDefaultAgentModel(env),
-      });
+    createSettingsService({
+      createUserClient,
+      defaultModel: resolveDefaultAgentModel(env),
+    });
   const uploadService =
     options.uploadService ?? createUploadService({ createUserClient });
   const databaseUrl = getDatabaseUrl(env);
-  const pgmq = databaseUrl
-    ? createPgmqClient(databaseUrl)
-    : undefined;
+  const pgmq = databaseUrl ? createPgmqClient(databaseUrl) : undefined;
   const jobService =
     options.jobService ??
     (pgmq
@@ -209,8 +213,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       getAdminClient,
       onUserAuthChanged: invalidateAuthCacheForUser,
     });
-  const tierGuard =
-    options.tierGuard ?? createTierGuard({ getAdminClient });
+  const tierGuard = options.tierGuard ?? createTierGuard({ getAdminClient });
 
   // Payment service — only created when Lemon Squeezy is configured
   let paymentService: PaymentService | undefined = options.paymentService;
@@ -227,7 +230,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   }
 
-  const connectionManager = options.connectionManager ?? new ConnectionManager();
+  const connectionManager =
+    options.connectionManager ?? new ConnectionManager();
   const eventBuffer = new CanvasEventBuffer();
   setInterval(() => eventBuffer.cleanup(), 5 * 60 * 1000);
   const agentRuns = createAgentRunService({
@@ -262,7 +266,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     if (corsResult.isBrowserRequest) {
-      reply.header("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+      reply.header(
+        "access-control-allow-methods",
+        "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      );
       reply.header(
         "access-control-allow-headers",
         resolveAllowedHeaders(
@@ -331,30 +338,49 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ...(jobService ? { jobService } : {}),
     ...(tierGuard ? { tierGuard } : {}),
   });
-  void registerCreditRoutes(app, { auth, adminService, creditService, viewerService });
+  void registerCreditRoutes(app, {
+    auth,
+    adminService,
+    creditService,
+    viewerService,
+  });
   void registerAdminRoutes(app, { auth, adminService });
   if (jobService) {
-    void registerJobRoutes(app, { auth, creditService, jobService, tierGuard, viewerService });
+    void registerJobRoutes(app, {
+      auth,
+      creditService,
+      jobService,
+      tierGuard,
+      viewerService,
+    });
   }
   void registerSkillRoutes(app, { auth, createUserClient, viewerService });
-  void registerMarketplaceRoutes(app, { auth, createUserClient, viewerService });
+  void registerMarketplaceRoutes(app, {
+    auth,
+    createUserClient,
+    viewerService,
+  });
 
   // Payment routes — only registered when Lemon Squeezy is configured
   if (paymentService) {
     void registerPaymentRoutes(app, { auth, paymentService, viewerService });
 
     if (env.lemonSqueezyWebhookSecret) {
+      const configuredPaymentService = paymentService;
+      const webhookSecret = env.lemonSqueezyWebhookSecret;
       // Webhook route is registered in an encapsulated plugin so the custom
       // content-type parser (needed for raw body access) does not leak to
       // other routes.
       void app.register(async (webhookScope) => {
         await registerPaymentWebhookRoute(webhookScope, {
           getAdminClient,
-          paymentService: paymentService!,
-          webhookSecret: env.lemonSqueezyWebhookSecret!,
+          paymentService: configuredPaymentService,
+          webhookSecret,
         });
       });
     }
+  } else {
+    void registerPaymentUnavailableRoutes(app);
   }
 
   return app;
