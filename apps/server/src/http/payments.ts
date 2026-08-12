@@ -155,7 +155,7 @@ export async function registerPaymentUnavailableRoutes(app: FastifyInstance) {
         error: {
           code: "payment_not_configured",
           message:
-            "Payment service is not configured. Add the Lemon Squeezy store, API key, webhook secret, and plan variant IDs.",
+            "Payment service is not configured. Configure a supported payment adapter before enabling checkout.",
         },
       }),
     );

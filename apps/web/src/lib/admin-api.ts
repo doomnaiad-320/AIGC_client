@@ -1,6 +1,8 @@
 import type {
   AdminAgentRun,
   AdminAuditEvent,
+  AdminBillingPlan,
+  AdminBillingPlanMutation,
   AdminCreditAdjustmentRequest,
   AdminCreditAdjustmentResponse,
   AdminCreditTransaction,
@@ -10,6 +12,7 @@ import type {
   AdminPasswordResetResponse,
   AdminPlatformAdmin,
   AdminPlatformAdminMutationRequest,
+  AdminUpdateBillingPlanDraft,
   AdminUpdateUserRequest,
   AdminUpdateUserStatusRequest,
   AdminUser,
@@ -35,6 +38,11 @@ const ADMIN_ERROR_MESSAGES: Record<string, string> = {
   admin_password_reset_failed: "无法生成密码重置令牌。",
   admin_platform_admin_update_failed: "无法更新平台管理员权限。",
   credit_adjustment_failed: "无法增加点数，请检查增加数量。",
+  admin_billing_plan_not_found: "未找到该套餐。",
+  admin_billing_plan_draft_not_found: "该套餐没有可发布的草稿。",
+  admin_billing_plan_draft_exists: "该套餐已经存在草稿，请直接编辑。",
+  admin_billing_plan_update_failed: "无法保存套餐草稿。",
+  admin_billing_plan_publish_failed: "无法发布套餐版本。",
   admin_request_failed: "管理后台请求失败，请稍后重试。",
 };
 
@@ -127,6 +135,13 @@ export function fetchAdminAuditEvents(accessToken: string) {
   return get<{ events: AdminAuditEvent[] }>(
     accessToken,
     "/api/admin/audit-events?limit=100",
+  );
+}
+
+export function fetchAdminBillingPlans(accessToken: string) {
+  return get<{ plans: AdminBillingPlan[] }>(
+    accessToken,
+    "/api/admin/billing/plans",
   );
 }
 
@@ -232,4 +247,43 @@ export async function adjustAdminCredits(
   );
   if (!response.ok) return handleError(response);
   return (await response.json()) as AdminCreditAdjustmentResponse;
+}
+
+export function updateAdminBillingPlanDraft(
+  accessToken: string,
+  planCode: string,
+  input: AdminUpdateBillingPlanDraft,
+) {
+  return mutate<{ plans: AdminBillingPlan[] }>(
+    accessToken,
+    `/api/admin/billing/plans/${planCode}/draft`,
+    "PATCH",
+    input,
+  );
+}
+
+export function createAdminBillingPlanDraft(
+  accessToken: string,
+  planCode: string,
+  input: AdminBillingPlanMutation,
+) {
+  return mutate<{ plans: AdminBillingPlan[] }>(
+    accessToken,
+    `/api/admin/billing/plans/${planCode}/draft`,
+    "POST",
+    input,
+  );
+}
+
+export function publishAdminBillingPlan(
+  accessToken: string,
+  planCode: string,
+  input: AdminBillingPlanMutation,
+) {
+  return mutate<{ plans: AdminBillingPlan[] }>(
+    accessToken,
+    `/api/admin/billing/plans/${planCode}/publish`,
+    "POST",
+    input,
+  );
 }

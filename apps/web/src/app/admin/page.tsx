@@ -25,6 +25,7 @@ import {
   ClipboardList,
   Coins,
   Copy,
+  CreditCard,
   Database,
   Eye,
   KeyRound,
@@ -84,6 +85,7 @@ import {
 } from "@/lib/admin-api";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { BillingPlansPanel } from "./billing-plans-panel";
 
 type AdminTab =
   | "users"
@@ -91,6 +93,7 @@ type AdminTab =
   | "jobs"
   | "agent-runs"
   | "ledger"
+  | "billing"
   | "audit"
   | "platform-admins";
 
@@ -129,6 +132,12 @@ const tabs: Array<{
     label: "点数流水",
     description: "查看点数发放、消耗、退还与人工加点记录。",
     icon: Coins,
+  },
+  {
+    id: "billing",
+    label: "套餐与计费",
+    description: "设置套餐价格、点数、并发与版本化权益。",
+    icon: CreditCard,
   },
   {
     id: "audit",
@@ -741,6 +750,9 @@ export default function AdminPage() {
             )}
             {tab === "ledger" && (
               <LedgerTable transactions={transactions} loading={loadingData} />
+            )}
+            {tab === "billing" && session?.access_token && (
+              <BillingPlansPanel accessToken={session.access_token} />
             )}
             {tab === "audit" && (
               <AuditTable events={events} loading={loadingData} />

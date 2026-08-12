@@ -2,23 +2,24 @@
 
 import { motion } from "framer-motion";
 
-import type { SubscriptionPlan } from "@loomic/shared";
 import { PricingCard } from "./pricing-card";
 import type { BillingPeriod } from "./pricing-data";
-import { pricingTiers, staggerContainer } from "./pricing-data";
+import { type PricingTier, staggerContainer } from "./pricing-data";
 
 interface PricingCardsProps {
   billingPeriod: BillingPeriod;
   currentPlan?: string | null | undefined;
   onCheckout?:
-    | ((plan: SubscriptionPlan, billingPeriod: BillingPeriod) => Promise<void>)
+    | ((plan: string, billingPeriod: BillingPeriod) => Promise<void>)
     | undefined;
+  tiers: PricingTier[];
 }
 
 export function PricingCards({
   billingPeriod,
   currentPlan,
   onCheckout,
+  tiers,
 }: PricingCardsProps) {
   return (
     <motion.div
@@ -26,9 +27,9 @@ export function PricingCards({
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true, amount: 0.2 }}
-      className="mx-auto grid max-w-7xl grid-cols-1 gap-6 md:grid-cols-3 xl:grid-cols-5"
+      className="mx-auto grid max-w-6xl grid-cols-1 gap-6 md:grid-cols-3"
     >
-      {pricingTiers.map((tier, index) => (
+      {tiers.map((tier, index) => (
         <PricingCard
           key={tier.id}
           tier={tier}

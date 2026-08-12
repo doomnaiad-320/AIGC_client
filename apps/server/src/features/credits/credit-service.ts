@@ -6,9 +6,12 @@ import type {
   CreditTransaction,
   SubscriptionPlan,
 } from "@loomic/shared";
-import { PLAN_CONFIGS } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
+import type {
+  BillingCatalogService,
+  RuntimePlanConfig,
+} from "../billing/billing-catalog-service.js";
 
 // ── Error ────────────────────────────────────────────────────
 
@@ -80,6 +83,7 @@ export type CreditService = {
     limit?: number,
   ): Promise<CreditTransaction[]>;
   getSubscription(workspaceId: string): Promise<SubscriptionInfo>;
+  getPlanConfig(workspaceId: string): Promise<RuntimePlanConfig>;
   updatePlan(workspaceId: string, plan: SubscriptionPlan): Promise<void>;
 };
 
@@ -87,6 +91,7 @@ export type CreditService = {
 
 export function createCreditService(options: {
   getAdminClient: () => AdminDbClient;
+  billingCatalogService: BillingCatalogService;
 }): CreditService {
   return {
     async getBalance(workspaceId) {
@@ -117,9 +122,7 @@ export function createCreditService(options: {
         plan: (subscriptionResult.data?.plan as SubscriptionPlan) ?? "free",
         dailyClaimed: true,
         dailyBalance: Number(billingBalance.daily_balance ?? 0),
-        subscriptionBalance: Number(
-          billingBalance.subscription_balance ?? 0,
-        ),
+        subscriptionBalance: Number(billingBalance.subscription_balance ?? 0),
         topUpBalance: Number(billingBalance.top_up_balance ?? 0),
         permanentBalance: Number(billingBalance.permanent_balance ?? 0),
       };
@@ -185,12 +188,9 @@ export function createCreditService(options: {
 
       const { data: grant, error: claimError } = await admin.rpc<
         Record<string, unknown>
-      >(
-        "billing_ensure_daily_credit_grant",
-        {
-          p_workspace_id: workspaceId,
-        },
-      );
+      >("billing_ensure_daily_credit_grant", {
+        p_workspace_id: workspaceId,
+      });
 
       if (claimError) {
         throw new CreditServiceError(
@@ -260,16 +260,56 @@ export function createCreditService(options: {
       };
     },
 
+    async getPlanConfig(workspaceId) {
+      try {
+        return await options.billingCatalogService.getRuntimePlanConfig(
+          workspaceId,
+        );
+      } catch (error) {
+        throw new CreditServiceError(
+          "credit_query_failed",
+          error instanceof Error
+            ? error.message
+            : "Failed to resolve plan configuration.",
+          500,
+        );
+      }
+    },
+
     async updatePlan(workspaceId, plan) {
       const admin = options.getAdminClient();
-      const config = PLAN_CONFIGS[plan];
+      const catalogCode =
+        plan === "free"
+          ? "free"
+          : plan === "ultra" || plan === "business"
+            ? "team"
+            : "pro";
+      const { data: version, error: versionError } = await admin.query<{
+        monthlyCredits: number;
+      }>(
+        `
+          select version.monthly_subscription_credits as "monthlyCredits"
+          from public.billing_plan_versions version
+          join public.billing_plans billing_plan on billing_plan.id = version.plan_id
+          where billing_plan.code = $1::text and version.status = 'published'
+          limit 1
+        `,
+        [catalogCode],
+      );
+      if (versionError || !version?.[0]) {
+        throw new CreditServiceError(
+          "credit_plan_update_failed",
+          "No published billing plan configuration is available.",
+          500,
+        );
+      }
 
       // Atomic plan update + credit grant via RPC to avoid read-then-write race condition.
       // The RPC uses FOR UPDATE row locking so concurrent deductions cannot be overwritten.
       const { error } = await admin.rpc("grant_plan_credits", {
         p_workspace_id: workspaceId,
         p_plan: plan,
-        p_credits: config.monthlyCredits,
+        p_credits: Number(version[0].monthlyCredits),
       });
 
       if (error) {

@@ -13,6 +13,42 @@ const adminUser = {
   userMetadata: {},
 };
 
+const billingPlan = {
+  code: "pro" as const,
+  descriptionZh: "面向专业用户",
+  draft: {
+    annualPriceMinor: 34800,
+    createdAt: "2026-08-12T00:00:00.000Z",
+    currency: "USD",
+    dailyCredits: 50,
+    effectiveFrom: null,
+    entitlements: {
+      allowedModelGroups: ["free", "standard", "advanced"],
+      apiEnabled: false,
+      maxBrandKits: 10,
+      maxConcurrentJobs: 4,
+      maxImageQuality: "hd" as const,
+      maxProjects: 50,
+      maxTeamSeats: 1,
+      maxVideoResolution: "1080p" as const,
+      queuePriority: "standard" as const,
+      watermark: false,
+    },
+    id: "66666666-6666-4666-8666-666666666666",
+    monthlyPriceMinor: 3900,
+    monthlySubscriptionCredits: 5000,
+    publishedAt: null,
+    status: "draft" as const,
+    topUpEligible: true,
+    version: 2,
+  },
+  id: "77777777-7777-4777-8777-777777777777",
+  isActive: true,
+  isPublic: true,
+  nameZh: "专业版",
+  published: null,
+};
+
 function makeService(isAdmin: boolean): PlatformAdminService {
   const workspace = {
     balance: 100,
@@ -82,6 +118,10 @@ function makeService(isAdmin: boolean): PlatformAdminService {
       balance: 100,
       transactionId: "22222222-2222-4222-8222-222222222222",
     }),
+    listBillingPlans: vi.fn().mockResolvedValue([billingPlan]),
+    updateBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
+    createBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
+    publishBillingPlan: vi.fn().mockResolvedValue([billingPlan]),
   };
 }
 
@@ -331,6 +371,67 @@ describe("admin routes", () => {
 
     expect(response.statusCode).toBe(400);
     expect(service.adjustCredits).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("does not expose billing plans to a non-admin", async () => {
+    const service = makeService(false);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/billing/plans",
+    });
+    expect(response.statusCode).toBe(403);
+    expect(service.listBillingPlans).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("saves a billing plan draft with the administrator as actor", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const input = {
+      annualPriceMinor: 34800,
+      currency: "USD",
+      dailyCredits: 50,
+      entitlements: billingPlan.draft.entitlements,
+      monthlyPriceMinor: 3900,
+      monthlySubscriptionCredits: 6000,
+      reason: "调整专业版月度点数",
+      topUpEligible: true,
+    };
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/billing/plans/pro/draft",
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(service.updateBillingPlanDraft).toHaveBeenCalledWith(
+      adminUser.id,
+      "pro",
+      input,
+    );
+    await app.close();
+  });
+
+  it("requires a reason before publishing a billing plan", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/billing/plans/pro/publish",
+      payload: { reason: "" },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(service.publishBillingPlan).not.toHaveBeenCalled();
     await app.close();
   });
 });

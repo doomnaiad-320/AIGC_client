@@ -32,6 +32,10 @@ import {
   createAgentRunMetadataService,
 } from "./features/agent-runs/agent-run-service.js";
 import {
+  type BillingCatalogService,
+  createBillingCatalogService,
+} from "./features/billing/billing-catalog-service.js";
+import {
   type ViewerService,
   createViewerService,
 } from "./features/bootstrap/ensure-user-foundation.js";
@@ -84,6 +88,7 @@ import {
 import { registerAllProviders } from "./generation/providers/register-all.js";
 import { registerAdminRoutes } from "./http/admin.js";
 import { registerAuthRoutes } from "./http/auth.js";
+import { registerBillingRoutes } from "./http/billing.js";
 import { registerBrandKitRoutes } from "./http/brand-kits.js";
 import { registerCanvasRoutes } from "./http/canvases.js";
 import { registerChatRoutes } from "./http/chat.js";
@@ -121,6 +126,7 @@ export type BuildAppOptions = {
   adminService?: PlatformAdminService;
   auth?: RequestAuthenticator;
   brandKitService?: BrandKitService;
+  billingCatalogService?: BillingCatalogService;
   canvasService?: CanvasService;
   chatService?: ChatService;
   connectionManager?: ConnectionManager;
@@ -205,17 +211,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     (pgmq
       ? createJobService({ createUserClient, getAdminClient, pgmq })
       : undefined);
+  const billingCatalogService =
+    options.billingCatalogService ??
+    createBillingCatalogService({ getAdminClient });
   const creditService =
-    options.creditService ?? createCreditService({ getAdminClient });
+    options.creditService ??
+    createCreditService({ getAdminClient, billingCatalogService });
   const adminService =
     options.adminService ??
     createPlatformAdminService({
       getAdminClient,
+      billingCatalogService,
       onUserAuthChanged: invalidateAuthCacheForUser,
     });
-  const tierGuard = options.tierGuard ?? createTierGuard({ getAdminClient });
+  const tierGuard =
+    options.tierGuard ??
+    createTierGuard({ billingCatalogService, getAdminClient });
 
-  // Payment service — only created when Lemon Squeezy is configured
+  // Optional legacy payment adapter. Core billing remains provider-neutral.
   let paymentService: PaymentService | undefined = options.paymentService;
   if (!paymentService && env.lemonSqueezyApiKey && env.lemonSqueezyStoreId) {
     const lsClient = createLemonSqueezyClient({
@@ -319,6 +332,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     viewerService,
   });
   void registerModelRoutes(app, env);
+  void registerBillingRoutes(app, { billingCatalogService });
   void registerImageModelRoutes(app, { auth, creditService, viewerService });
   void registerVideoModelRoutes(app, { auth, creditService, viewerService });
   void registerChatRoutes(app, {
@@ -361,7 +375,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     viewerService,
   });
 
-  // Payment routes — only registered when Lemon Squeezy is configured
+  // Expose checkout routes only when a payment adapter is configured.
   if (paymentService) {
     void registerPaymentRoutes(app, { auth, paymentService, viewerService });
 

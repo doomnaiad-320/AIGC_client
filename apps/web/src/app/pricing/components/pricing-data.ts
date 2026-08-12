@@ -35,202 +35,162 @@ export interface FAQItem {
   answer: string;
 }
 
-// ---------------------------------------------------------------------------
-// Tiers
-// ---------------------------------------------------------------------------
+export function buildPricingData(
+  plans: import("@loomic/shared").PublishedBillingPlan[],
+) {
+  const pricingTiers: PricingTier[] = plans.map((plan) => ({
+    id: plan.code,
+    name: plan.nameZh,
+    nameEn: plan.code,
+    description: plan.descriptionZh,
+    monthlyPrice: plan.monthlyPriceMinor / 100,
+    yearlyPrice: plan.annualPriceMinor > 0 ? plan.annualPriceMinor / 1200 : 0,
+    credits: plan.monthlySubscriptionCredits,
+    creditLabel: [
+      plan.monthlySubscriptionCredits > 0
+        ? `${plan.monthlySubscriptionCredits.toLocaleString()} 积分/月`
+        : null,
+      plan.dailyCredits > 0 ? `每天赠送 ${plan.dailyCredits} 积分` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    ...(plan.code === "pro" ? { badge: "推荐", highlighted: true } : {}),
+    features: [
+      `${plan.entitlements.maxConcurrentJobs} 个并发任务`,
+      `图片最高${qualityLabel(plan.entitlements.maxImageQuality)}`,
+      `视频最高 ${plan.entitlements.maxVideoResolution}`,
+      `${limitLabel(plan.entitlements.maxProjects)}个项目`,
+      `${limitLabel(plan.entitlements.maxBrandKits)}个品牌套件`,
+      `${plan.entitlements.maxTeamSeats} 个团队席位`,
+      plan.topUpEligible ? "可购买独立点数包" : "不开放独立点数包",
+    ],
+    cta: plan.code === "free" ? "免费开始" : `选择${plan.nameZh}`,
+    ctaVariant:
+      plan.code === "pro"
+        ? "accent"
+        : plan.code === "free"
+          ? "outline"
+          : "default",
+  }));
 
-export const pricingTiers: PricingTier[] = [
-  {
-    id: "free",
-    name: "Free",
-    nameEn: "Free",
-    description: "体验 AI 创作的魔力",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    credits: 1500,
-    creditLabel: "50 积分/天",
-    features: [
-      "3 款基础图片模型",
-      "最高 1K 分辨率",
-      "3 个项目",
-      "1 个品牌套件",
-      "社区支持",
-    ],
-    cta: "免费开始",
-    ctaVariant: "outline",
-  },
-  {
-    id: "starter",
-    name: "Starter",
-    nameEn: "Starter",
-    description: "个人创作者的起点",
-    monthlyPrice: 12,
-    yearlyPrice: 9,
-    credits: 1200,
-    creditLabel: "1,200 积分/月",
-    features: [
-      "全部图片模型",
-      "2 款基础视频模型",
-      "最高 1K 分辨率",
-      "10 个项目",
-      "3 个品牌套件",
-      "个人商用授权",
-    ],
-    cta: "选择 Starter",
-    ctaVariant: "default",
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    nameEn: "Pro",
-    description: "专业设计师的首选",
-    monthlyPrice: 39,
-    yearlyPrice: 29,
-    credits: 5000,
-    creditLabel: "5,000 积分/月",
-    badge: "最受欢迎",
-    highlighted: true,
-    features: [
-      "全部图片 + 视频模型",
-      "最高 2K 分辨率",
-      "4 个并发任务",
-      "50 个项目",
-      "10 个品牌套件",
-      "完整商业授权",
-      "邮件支持",
-    ],
-    cta: "选择 Pro",
-    ctaVariant: "accent",
-  },
-  {
-    id: "ultra",
-    name: "Ultra",
-    nameEn: "Ultra",
-    description: "团队与高产出工作室",
-    monthlyPrice: 99,
-    yearlyPrice: 79,
-    credits: 15000,
-    creditLabel: "15,000 积分/月",
-    badge: "最划算",
-    features: [
-      "一切 Pro 功能",
-      "最高 4K 分辨率",
-      "8 个并发任务",
-      "200 个项目",
-      "30 个品牌套件",
-      "3 个团队席位",
-      "API 接入 (Beta)",
-      "优先邮件支持",
-    ],
-    cta: "选择 Ultra",
-    ctaVariant: "default",
-  },
-  {
-    id: "business",
-    name: "Business",
-    nameEn: "Business",
-    description: "规模化创意生产",
-    monthlyPrice: 249,
-    yearlyPrice: 199,
-    credits: 50000,
-    creditLabel: "50,000 积分/月",
-    features: [
-      "一切 Ultra 功能",
-      "12 个并发任务",
-      "无限项目",
-      "100 个品牌套件",
-      "10+ 团队席位",
-      "完整 API 接入",
-      "专属客户经理",
-      "SLA 保障",
-    ],
-    cta: "选择 Business",
-    ctaVariant: "outline",
-  },
-];
+  const featureCategories: FeatureCategory[] = [
+    {
+      name: "创作能力",
+      features: [
+        {
+          name: "图片最高质量",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              qualityLabel(plan.entitlements.maxImageQuality),
+            ]),
+          ),
+        },
+        {
+          name: "视频最高分辨率",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              plan.entitlements.maxVideoResolution,
+            ]),
+          ),
+        },
+        {
+          name: "并发任务",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              String(plan.entitlements.maxConcurrentJobs),
+            ]),
+          ),
+        },
+      ],
+    },
+    {
+      name: "积分与用量",
+      features: [
+        {
+          name: "每月订阅点数",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              plan.monthlySubscriptionCredits > 0
+                ? plan.monthlySubscriptionCredits.toLocaleString()
+                : false,
+            ]),
+          ),
+        },
+        {
+          name: "每日赠送",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              plan.dailyCredits > 0 ? `${plan.dailyCredits}/天` : false,
+            ]),
+          ),
+        },
+        {
+          name: "独立点数包",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [plan.code, plan.topUpEligible]),
+          ),
+        },
+      ],
+    },
+    {
+      name: "协作与管理",
+      features: [
+        {
+          name: "项目数量",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              limitLabel(plan.entitlements.maxProjects),
+            ]),
+          ),
+        },
+        {
+          name: "品牌套件",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              limitLabel(plan.entitlements.maxBrandKits),
+            ]),
+          ),
+        },
+        {
+          name: "团队席位",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [
+              plan.code,
+              String(plan.entitlements.maxTeamSeats),
+            ]),
+          ),
+        },
+        {
+          name: "API 接入",
+          tiers: Object.fromEntries(
+            plans.map((plan) => [plan.code, plan.entitlements.apiEnabled]),
+          ),
+        },
+      ],
+    },
+  ];
 
-// ---------------------------------------------------------------------------
-// Feature Comparison
-// ---------------------------------------------------------------------------
+  return { featureCategories, pricingTiers };
+}
 
-export const featureCategories: FeatureCategory[] = [
-  {
-    name: "创作能力",
-    features: [
-      {
-        name: "图片生成模型",
-        tiers: { free: "基础 3 款", starter: "全部", pro: "全部", ultra: "全部", business: "全部" },
-      },
-      {
-        name: "视频生成模型",
-        tiers: { free: false, starter: "基础 2 款", pro: "全部", ultra: "全部", business: "全部" },
-      },
-      {
-        name: "最高分辨率",
-        tiers: { free: "1K", starter: "1K", pro: "2K", ultra: "4K", business: "4K" },
-      },
-      {
-        name: "并发任务",
-        tiers: { free: "1", starter: "2", pro: "4", ultra: "8", business: "12" },
-      },
-    ],
-  },
-  {
-    name: "积分与用量",
-    features: [
-      {
-        name: "月积分",
-        tiers: { free: "50/天", starter: "1,200", pro: "5,000", ultra: "15,000", business: "50,000" },
-      },
-      {
-        name: "积分充值折扣",
-        tiers: { free: false, starter: false, pro: "10%", ultra: "15%", business: "20%" },
-      },
-      {
-        name: "积分有效期",
-        tiers: { free: "当日", starter: "当月", pro: "当月", ultra: "当月", business: "当月" },
-      },
-    ],
-  },
-  {
-    name: "协作与管理",
-    features: [
-      {
-        name: "项目数量",
-        tiers: { free: "3", starter: "10", pro: "50", ultra: "200", business: "无限" },
-      },
-      {
-        name: "品牌套件",
-        tiers: { free: "1", starter: "3", pro: "10", ultra: "30", business: "100" },
-      },
-      {
-        name: "团队席位",
-        tiers: { free: false, starter: false, pro: false, ultra: "3", business: "10+" },
-      },
-      {
-        name: "API 接入",
-        tiers: { free: false, starter: false, pro: false, ultra: "Beta", business: true },
-      },
-    ],
-  },
-  {
-    name: "权益与支持",
-    features: [
-      {
-        name: "商业授权",
-        tiers: { free: false, starter: "个人", pro: true, ultra: true, business: true },
-      },
-      {
-        name: "文件存储",
-        tiers: { free: "7 天", starter: "30 天", pro: "1 年", ultra: "1 年", business: "永久" },
-      },
-      {
-        name: "客户支持",
-        tiers: { free: "社区", starter: "社区", pro: "邮件", ultra: "优先邮件", business: "专属客服" },
-      },
-    ],
-  },
-];
+function qualityLabel(value: string) {
+  return (
+    ({ standard: "标准", hd: "高清", ultra: "超清" } as Record<string, string>)[
+      value
+    ] ?? value
+  );
+}
+
+function limitLabel(value: number) {
+  return value === -1 ? "不限" : value.toLocaleString();
+}
 
 // ---------------------------------------------------------------------------
 // FAQ
@@ -260,12 +220,12 @@ export const faqItems: FAQItem[] = [
   {
     question: "团队席位如何工作？",
     answer:
-      "Ultra 和 Business 套餐包含团队席位。每位团队成员共享套餐积分池，可独立创建项目和使用品牌套件。需要更多席位可联系我们。",
+      "团队版包含多个团队席位。成员共享工作区的套餐点数池，可以协作管理项目和品牌套件。需要更多席位可联系我们。",
   },
   {
     question: "支持哪些支付方式？",
     answer:
-      "我们通过 Stripe 接受所有主流信用卡和借记卡（Visa、Mastercard、American Express）。中国用户还可使用支付宝支付。",
+      "最终可用的支付方式由上线时配置的支付渠道决定。结算页面会显示当前支持的信用卡、本地支付或合同付款方式。",
   },
   {
     question: "如何申请退款？",

@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-import { featureCategories, pricingTiers, fadeInUp } from "./pricing-data";
-
-const tierIds = pricingTiers.map((t) => t.id);
-const proIndex = tierIds.indexOf("pro");
+import {
+  type FeatureCategory,
+  type PricingTier,
+  fadeInUp,
+} from "./pricing-data";
 
 const INITIAL_CATEGORIES = 2;
 
@@ -27,8 +28,16 @@ function CellValue({ value }: { value: string | boolean }) {
   return <span>{value}</span>;
 }
 
-export function PricingComparison() {
+export function PricingComparison({
+  featureCategories,
+  pricingTiers,
+}: {
+  featureCategories: FeatureCategory[];
+  pricingTiers: PricingTier[];
+}) {
   const [expanded, setExpanded] = useState(false);
+  const tierIds = pricingTiers.map((tier) => tier.id);
+  const proIndex = tierIds.indexOf("pro");
 
   const visibleCategories = expanded
     ? featureCategories
@@ -79,7 +88,12 @@ export function PricingComparison() {
 
           <tbody>
             {visibleCategories.map((category) => (
-              <CategoryRows key={category.name} category={category} />
+              <CategoryRows
+                key={category.name}
+                category={category}
+                tierIds={tierIds}
+                proIndex={proIndex}
+              />
             ))}
           </tbody>
         </table>
@@ -103,8 +117,12 @@ export function PricingComparison() {
 
 function CategoryRows({
   category,
+  tierIds,
+  proIndex,
 }: {
-  category: (typeof featureCategories)[number];
+  category: FeatureCategory;
+  tierIds: string[];
+  proIndex: number;
 }) {
   return (
     <>

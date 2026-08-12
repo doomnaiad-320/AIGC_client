@@ -16,6 +16,7 @@ import { getDatabaseUrl } from "./db/postgres.js";
 import { createPgmqClient, type PgmqMessage } from "./queue/pgmq-client.js";
 import { createJobService } from "./features/jobs/job-service.js";
 import { createCreditService, type CreditService } from "./features/credits/credit-service.js";
+import { createBillingCatalogService } from "./features/billing/billing-catalog-service.js";
 import { getExecutor, type ExecutorContext } from "./features/jobs/job-executor.js";
 import { createAdminDbClient } from "./db/client.js";
 import { createUserDbClientFactory } from "./auth/user.js";
@@ -64,7 +65,11 @@ async function main() {
   };
 
   const jobService = createJobService({ createUserClient, getAdminClient, pgmq });
-  const creditService = createCreditService({ getAdminClient });
+  const billingCatalogService = createBillingCatalogService({ getAdminClient });
+  const creditService = createCreditService({
+    billingCatalogService,
+    getAdminClient,
+  });
 
   // Base context — per-message fields (queue, msgId, renewVt) are added in processMessage
   const baseCtx = {

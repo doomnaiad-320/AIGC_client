@@ -2,13 +2,11 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import {
-  PLAN_CONFIGS,
   applicationErrorResponseSchema,
   profileUpdateRequestSchema,
   profileUpdateResponseSchema,
   unauthenticatedErrorResponseSchema,
   viewerResponseSchema,
-  type SubscriptionPlan,
 } from "@loomic/shared";
 
 import {
@@ -64,15 +62,17 @@ export async function registerViewerRoutes(
           const updatedBalance = await options.creditService.getBalance(
             viewer.workspace.id,
           );
-          const config = PLAN_CONFIGS[updatedBalance.plan as SubscriptionPlan];
+          const config = await options.creditService.getPlanConfig(
+            viewer.workspace.id,
+          );
           credits = {
             balance: updatedBalance.balance,
             plan: updatedBalance.plan,
             dailyClaimed: updatedBalance.dailyClaimed,
             limits: {
               maxConcurrentJobs: config.maxConcurrentJobs,
-              maxResolution: config.maxResolution,
-              monthlyCredits: config.monthlyCredits,
+              maxResolution: config.maxImageQuality,
+              monthlyCredits: config.monthlySubscriptionCredits,
               dailyCredits: config.dailyCredits,
             },
           };

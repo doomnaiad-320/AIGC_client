@@ -472,12 +472,11 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           const workspaceId = ws.id;
           let creditsCost = 0;
           if (options.creditService && options.tierGuard) {
-            const sub = await options.creditService.getSubscription(workspaceId);
             const quality = (input.quality as ImageQualityLevel) ?? "hd";
             try {
-              options.tierGuard.checkModelAccess(sub.plan, input.model);
-              options.tierGuard.checkResolution(sub.plan, quality);
-              await options.tierGuard.checkConcurrency(workspaceId, sub.plan);
+              await options.tierGuard.checkModelAccess(workspaceId, input.model);
+              await options.tierGuard.checkResolution(workspaceId, quality);
+              await options.tierGuard.checkConcurrency(workspaceId);
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);
@@ -664,13 +663,12 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
           const workspaceId = ws.id;
           let creditsCost = 0;
           if (options.creditService && options.tierGuard) {
-            const sub = await options.creditService.getSubscription(workspaceId);
             try {
-              options.tierGuard.checkModelAccess(sub.plan, input.model);
+              await options.tierGuard.checkModelAccess(workspaceId, input.model);
               if (input.resolution) {
-                options.tierGuard.checkVideoResolution(sub.plan, input.resolution as any);
+                await options.tierGuard.checkVideoResolution(workspaceId, input.resolution as any);
               }
-              await options.tierGuard.checkConcurrency(workspaceId, sub.plan);
+              await options.tierGuard.checkConcurrency(workspaceId);
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);
@@ -1228,7 +1226,6 @@ function mapEventToStatus(event: StreamEvent): RuntimeRunStatus {
       return "running";
   }
 }
-
 function toFailedEvent(
   runId: string,
   now: () => string,

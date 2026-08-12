@@ -1,9 +1,9 @@
 "use client";
 
-import type { SubscriptionPlan } from "@loomic/shared";
+import type { PublishedBillingPlan } from "@loomic/shared";
 import { BadgeAlert, Settings } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSubscription } from "@/hooks/use-subscription";
 import { useAuth } from "@/lib/auth-context";
@@ -13,27 +13,43 @@ import { PricingCards } from "./components/pricing-cards";
 import { PricingComparison } from "./components/pricing-comparison";
 import { PricingCTA } from "./components/pricing-cta";
 import type { BillingPeriod } from "./components/pricing-data";
+import { buildPricingData } from "./components/pricing-data";
 import { PricingFAQ } from "./components/pricing-faq";
 import { PricingHero } from "./components/pricing-hero";
 import { PricingNav } from "./components/pricing-nav";
 import { PricingToggle } from "./components/pricing-toggle";
-
-function openLemonCheckout(url: string) {
-  if (window.LemonSqueezy?.Url?.Open) {
-    window.LemonSqueezy.Url.Open(url);
-  } else {
-    window.open(url, "_blank");
-  }
-}
 
 export default function PricingPage() {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("yearly");
   const { session } = useAuth();
   const { subscription, refresh: refreshSubscription } = useSubscription();
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [publishedPlans, setPublishedPlans] = useState<PublishedBillingPlan[]>(
+    [],
+  );
+
+  useEffect(() => {
+    fetch(
+      `${process.env.NEXT_PUBLIC_SERVER_BASE_URL?.trim() || "http://localhost:3001"}/api/billing/plans`,
+    )
+      .then((response) =>
+        response.ok
+          ? response.json()
+          : Promise.reject(new Error("无法加载套餐")),
+      )
+      .then((result: { plans: PublishedBillingPlan[] }) =>
+        setPublishedPlans(result.plans),
+      )
+      .catch(() => setCheckoutError("暂时无法加载套餐配置，请稍后重试。"));
+  }, []);
+
+  const pricingData = useMemo(
+    () => buildPricingData(publishedPlans),
+    [publishedPlans],
+  );
 
   const handleCheckout = useCallback(
-    async (plan: SubscriptionPlan, period: BillingPeriod) => {
+    async (plan: string, period: BillingPeriod) => {
       const token = session?.access_token;
       if (!token) {
         window.location.href = "/login?redirect=/pricing";
@@ -42,13 +58,18 @@ export default function PricingPage() {
 
       setCheckoutError(null);
       try {
+        const legacyAdapterPlan = plan === "team" ? "ultra" : plan;
         if (subscription?.lemonSqueezySubscriptionId) {
-          await changePlan(token, plan, period);
+          await changePlan(token, legacyAdapterPlan, period);
           await refreshSubscription();
           return;
         }
-        const { checkoutUrl } = await createCheckout(token, plan, period);
-        openLemonCheckout(checkoutUrl);
+        const { checkoutUrl } = await createCheckout(
+          token,
+          legacyAdapterPlan,
+          period,
+        );
+        window.location.assign(checkoutUrl);
       } catch (error) {
         setCheckoutError(
           error instanceof Error
@@ -112,12 +133,16 @@ export default function PricingPage() {
             billingPeriod={billingPeriod}
             currentPlan={subscription?.plan ?? null}
             onCheckout={handleCheckout}
+            tiers={pricingData.pricingTiers}
           />
         </section>
 
         {/* Feature comparison */}
         <div id="features">
-          <PricingComparison />
+          <PricingComparison
+            featureCategories={pricingData.featureCategories}
+            pricingTiers={pricingData.pricingTiers}
+          />
         </div>
 
         <PricingFAQ />

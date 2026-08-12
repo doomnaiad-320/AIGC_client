@@ -1,6 +1,5 @@
 // @credits-system — Payment lifecycle: checkout creation, subscription sync, cancellation, plan changes
 import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
-import { PLAN_CONFIGS } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
 import type { LemonSqueezyClient } from "./lemon-squeezy-client.js";
@@ -431,8 +430,33 @@ async function grantMonthlyCredits(
   workspaceId: string,
   plan: SubscriptionPlan,
 ): Promise<void> {
-  const config = PLAN_CONFIGS[plan];
-  if (config.monthlyCredits <= 0) return;
+  const planCode =
+    plan === "free"
+      ? "free"
+      : plan === "ultra" || plan === "business"
+        ? "team"
+        : "pro";
+  const { data: planRows, error: planError } = await admin.query<{
+    monthlyCredits: number;
+  }>(
+    `
+      select version.monthly_subscription_credits as "monthlyCredits"
+      from public.billing_plan_versions version
+      join public.billing_plans billing_plan on billing_plan.id = version.plan_id
+      where billing_plan.code = $1::text and version.status = 'published'
+      limit 1
+    `,
+    [planCode],
+  );
+  if (planError || !planRows?.[0]) {
+    throw new PaymentServiceError(
+      "webhook_processing_failed",
+      "Published billing plan configuration is unavailable.",
+      500,
+    );
+  }
+  const monthlyCredits = Number(planRows[0].monthlyCredits);
+  if (monthlyCredits <= 0) return;
 
   const { data: balanceRow } = await admin
     .from("credit_balances")
@@ -441,7 +465,7 @@ async function grantMonthlyCredits(
     .maybeSingle();
 
   if (balanceRow) {
-    const newBalance = (balanceRow.balance ?? 0) + config.monthlyCredits;
+    const newBalance = (balanceRow.balance ?? 0) + monthlyCredits;
     await admin
       .from("credit_balances")
       .update({
@@ -454,7 +478,7 @@ async function grantMonthlyCredits(
     await admin.from("credit_transactions").insert({
       workspace_id: workspaceId,
       transaction_type: "subscription_grant",
-      amount: config.monthlyCredits,
+      amount: monthlyCredits,
       balance_after: newBalance,
       description: `${plan} plan — monthly credits granted`,
     });
@@ -462,15 +486,15 @@ async function grantMonthlyCredits(
     // Create balance row if it doesn't exist
     await admin.from("credit_balances").insert({
       workspace_id: workspaceId,
-      balance: config.monthlyCredits,
+      balance: monthlyCredits,
       version: 1,
     });
 
     await admin.from("credit_transactions").insert({
       workspace_id: workspaceId,
       transaction_type: "subscription_grant",
-      amount: config.monthlyCredits,
-      balance_after: config.monthlyCredits,
+      amount: monthlyCredits,
+      balance_after: monthlyCredits,
       description: `${plan} plan — initial monthly credits granted`,
     });
   }

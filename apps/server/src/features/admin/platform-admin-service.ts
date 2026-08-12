@@ -3,6 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 import type {
   AdminAgentRun,
   AdminAuditEvent,
+  AdminBillingPlan,
+  AdminBillingPlanMutation,
   AdminCreditAdjustmentRequest,
   AdminCreditAdjustmentResponse,
   AdminCreditTransaction,
@@ -12,6 +14,7 @@ import type {
   AdminPasswordResetResponse,
   AdminPlatformAdmin,
   AdminPlatformAdminMutationRequest,
+  AdminUpdateBillingPlanDraft,
   AdminUpdateUserRequest,
   AdminUpdateUserStatusRequest,
   AdminUser,
@@ -24,6 +27,7 @@ import type {
 } from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
+import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
 
 export class PlatformAdminServiceError extends Error {
   constructor(
@@ -38,6 +42,11 @@ export class PlatformAdminServiceError extends Error {
       | "admin_user_status_update_failed"
       | "admin_password_reset_failed"
       | "admin_platform_admin_update_failed"
+      | "admin_billing_plan_not_found"
+      | "admin_billing_plan_draft_not_found"
+      | "admin_billing_plan_draft_exists"
+      | "admin_billing_plan_update_failed"
+      | "admin_billing_plan_publish_failed"
       | "credit_adjustment_failed",
     message: string,
     readonly statusCode: number,
@@ -107,6 +116,22 @@ export type PlatformAdminService = {
     actorUserId: string,
     input: AdminCreditAdjustmentRequest,
   ): Promise<AdminCreditAdjustmentResponse>;
+  listBillingPlans(): Promise<AdminBillingPlan[]>;
+  updateBillingPlanDraft(
+    actorUserId: string,
+    planCode: string,
+    input: AdminUpdateBillingPlanDraft,
+  ): Promise<AdminBillingPlan[]>;
+  createBillingPlanDraft(
+    actorUserId: string,
+    planCode: string,
+    input: AdminBillingPlanMutation,
+  ): Promise<AdminBillingPlan[]>;
+  publishBillingPlan(
+    actorUserId: string,
+    planCode: string,
+    input: AdminBillingPlanMutation,
+  ): Promise<AdminBillingPlan[]>;
 };
 
 const USER_COLUMNS = `
@@ -172,6 +197,7 @@ const WORKSPACE_JOINS = `
 
 export function createPlatformAdminService(options: {
   getAdminClient: () => AdminDbClient;
+  billingCatalogService: BillingCatalogService;
   onUserAuthChanged?: (userId: string) => void;
 }): PlatformAdminService {
   const getAdmin = options.getAdminClient;
@@ -572,7 +598,7 @@ export function createPlatformAdminService(options: {
         if (result.activeSubscriptionId) {
           throw new PlatformAdminServiceError(
             "admin_subscription_managed_externally",
-            "This plan is managed by an active Lemon Squeezy subscription.",
+            "This plan is managed by an active external subscription.",
             409,
           );
         }
@@ -581,6 +607,24 @@ export function createPlatformAdminService(options: {
           "The user does not own a workspace.",
           400,
         );
+      }
+      if (plan && result.workspaceId) {
+        const { error: billingSyncError } = await getAdmin().rpc(
+          "sync_workspace_billing_plan_from_legacy",
+          {
+            p_workspace_id: result.workspaceId,
+            p_legacy_plan: plan,
+            p_actor_user_id: actorUserId,
+            p_reason: input.reason,
+          },
+        );
+        if (billingSyncError) {
+          throw new PlatformAdminServiceError(
+            "admin_user_plan_update_failed",
+            "Unable to synchronize the versioned billing plan.",
+            500,
+          );
+        }
       }
       if (email) options.onUserAuthChanged?.(userId);
       return service.getUserDetail(userId);
@@ -998,9 +1042,116 @@ export function createPlatformAdminService(options: {
         balance: data.balance,
       };
     },
+
+    async listBillingPlans() {
+      try {
+        return await options.billingCatalogService.listAdminPlans();
+      } catch {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load billing plans.",
+          500,
+        );
+      }
+    },
+
+    async updateBillingPlanDraft(actorUserId, planCode, input) {
+      const entitlements = {
+        "api.enabled": input.entitlements.apiEnabled,
+        "brand_kits.max_count": input.entitlements.maxBrandKits,
+        "generation.allowed_model_groups":
+          input.entitlements.allowedModelGroups,
+        "generation.max_concurrent_jobs": input.entitlements.maxConcurrentJobs,
+        "generation.watermark": input.entitlements.watermark,
+        "image.max_quality": input.entitlements.maxImageQuality,
+        "projects.max_count": input.entitlements.maxProjects,
+        "queue.priority": input.entitlements.queuePriority,
+        "team.max_seats": input.entitlements.maxTeamSeats,
+        "video.max_resolution": input.entitlements.maxVideoResolution,
+      };
+      const { error } = await getAdmin().rpc("admin_save_billing_plan_draft", {
+        p_actor_user_id: actorUserId,
+        p_plan_code: planCode,
+        p_currency: input.currency,
+        p_monthly_price_minor: input.monthlyPriceMinor,
+        p_annual_price_minor: input.annualPriceMinor,
+        p_monthly_subscription_credits: input.monthlySubscriptionCredits,
+        p_daily_credits: input.dailyCredits,
+        p_top_up_eligible: input.topUpEligible,
+        p_entitlements: entitlements,
+        p_reason: input.reason,
+      });
+      if (error) {
+        throw mapBillingError(error.message, "update");
+      }
+      return service.listBillingPlans();
+    },
+
+    async createBillingPlanDraft(actorUserId, planCode, input) {
+      const { error } = await getAdmin().rpc(
+        "admin_create_billing_plan_draft",
+        {
+          p_actor_user_id: actorUserId,
+          p_plan_code: planCode,
+          p_reason: input.reason,
+        },
+      );
+      if (error) {
+        throw mapBillingError(error.message, "create");
+      }
+      return service.listBillingPlans();
+    },
+
+    async publishBillingPlan(actorUserId, planCode, input) {
+      const { error } = await getAdmin().rpc("admin_publish_billing_plan", {
+        p_actor_user_id: actorUserId,
+        p_plan_code: planCode,
+        p_reason: input.reason,
+      });
+      if (error) {
+        throw mapBillingError(error.message, "publish");
+      }
+      return service.listBillingPlans();
+    },
   };
 
   return service;
+}
+
+function mapBillingError(
+  message: string,
+  operation: "create" | "publish" | "update",
+) {
+  if (message.includes("BILLING_PLAN_NOT_FOUND")) {
+    return new PlatformAdminServiceError(
+      "admin_billing_plan_not_found",
+      "Billing plan was not found.",
+      404,
+    );
+  }
+  if (message.includes("BILLING_PLAN_DRAFT_EXISTS")) {
+    return new PlatformAdminServiceError(
+      "admin_billing_plan_draft_exists",
+      "A draft already exists for this billing plan.",
+      409,
+    );
+  }
+  if (message.includes("BILLING_PLAN_DRAFT_NOT_FOUND")) {
+    return new PlatformAdminServiceError(
+      "admin_billing_plan_draft_not_found",
+      "No draft exists for this billing plan.",
+      404,
+    );
+  }
+  return new PlatformAdminServiceError(
+    operation === "publish"
+      ? "admin_billing_plan_publish_failed"
+      : "admin_billing_plan_update_failed",
+    operation === "publish"
+      ? "Unable to publish billing plan."
+      : "Unable to update billing plan draft.",
+    500,
+  );
 }
 
 function clampLimit(value: number | undefined, fallback: number) {

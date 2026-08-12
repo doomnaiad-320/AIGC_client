@@ -1,17 +1,13 @@
 // @credits-system — Image model list with tier annotations, credit costs, and accessibility flags
 import type { FastifyInstance } from "fastify";
 
-import {
-  canAccessModel,
-  getImageCreditCost,
-  MODEL_MIN_TIER,
-  type SubscriptionPlan,
-} from "@loomic/shared";
+import { MODEL_MIN_TIER, getImageCreditCost } from "@loomic/shared";
 
-import type { CreditService } from "../features/credits/credit-service.js";
-import { getAvailableImageModels } from "../generation/providers/registry.js";
 import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
+import type { CreditService } from "../features/credits/credit-service.js";
+import { getModelAccessGroup } from "../features/credits/tier-guard.js";
+import { getAvailableImageModels } from "../generation/providers/registry.js";
 
 export async function registerImageModelRoutes(
   app: FastifyInstance,
@@ -25,15 +21,15 @@ export async function registerImageModelRoutes(
     const models = getAvailableImageModels();
 
     // Try to authenticate — unauthenticated users still see models
-    let userPlan: SubscriptionPlan | null = null;
+    let allowedModelGroups: string[] | null = null;
     try {
       const user = await options.auth.authenticate(request);
       if (user) {
         const viewer = await options.viewerService.ensureViewer(user);
-        const balance = await options.creditService.getBalance(
+        const config = await options.creditService.getPlanConfig(
           viewer.workspace.id,
         );
-        userPlan = balance.plan;
+        allowedModelGroups = config.allowedModelGroups;
       }
     } catch {
       // Auth failure is non-fatal — just show models as inaccessible
@@ -45,7 +41,8 @@ export async function registerImageModelRoutes(
       description: m.description,
       iconUrl: m.iconUrl,
       provider: m.provider,
-      accessible: userPlan !== null && canAccessModel(userPlan, m.id),
+      accessible:
+        allowedModelGroups?.includes(getModelAccessGroup(m.id)) ?? false,
       creditCost: getImageCreditCost(m.id, "hd"),
       minTier: MODEL_MIN_TIER[m.id] ?? "pro",
     }));

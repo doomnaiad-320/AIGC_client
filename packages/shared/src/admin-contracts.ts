@@ -240,3 +240,91 @@ export const adminCreditAdjustmentResponseSchema = z.object({
 export type AdminCreditAdjustmentResponse = z.infer<
   typeof adminCreditAdjustmentResponseSchema
 >;
+
+export const billingPlanCodeSchema = z.enum([
+  "free",
+  "pro",
+  "team",
+  "enterprise",
+]);
+export type BillingPlanCode = z.infer<typeof billingPlanCodeSchema>;
+
+export const billingPlanVersionStatusSchema = z.enum([
+  "draft",
+  "published",
+  "retired",
+]);
+export type BillingPlanVersionStatus = z.infer<
+  typeof billingPlanVersionStatusSchema
+>;
+
+export const billingPlanEntitlementsSchema = z.object({
+  maxConcurrentJobs: z.number().int().min(1).max(100),
+  allowedModelGroups: z.array(z.string().trim().min(1).max(80)).max(20),
+  maxImageQuality: z.enum(["standard", "hd", "ultra"]),
+  maxVideoResolution: z.enum(["720p", "1080p", "4k"]),
+  maxProjects: z.number().int().min(-1).max(1_000_000),
+  maxBrandKits: z.number().int().min(-1).max(1_000_000),
+  maxTeamSeats: z.number().int().min(1).max(100_000),
+  watermark: z.boolean(),
+  queuePriority: z.enum(["standard", "high", "highest"]),
+  apiEnabled: z.boolean(),
+});
+export type BillingPlanEntitlements = z.infer<
+  typeof billingPlanEntitlementsSchema
+>;
+
+export const adminBillingPlanVersionSchema = z.object({
+  id: z.string().uuid(),
+  version: z.number().int().positive(),
+  status: billingPlanVersionStatusSchema,
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  monthlyPriceMinor: z.number().int().nonnegative(),
+  annualPriceMinor: z.number().int().nonnegative(),
+  monthlySubscriptionCredits: z.number().int().nonnegative(),
+  dailyCredits: z.number().int().nonnegative(),
+  topUpEligible: z.boolean(),
+  effectiveFrom: nullableTimestampSchema,
+  publishedAt: nullableTimestampSchema,
+  createdAt: z.string().datetime({ offset: true }),
+  entitlements: billingPlanEntitlementsSchema,
+});
+export type AdminBillingPlanVersion = z.infer<
+  typeof adminBillingPlanVersionSchema
+>;
+
+export const adminBillingPlanSchema = z.object({
+  id: z.string().uuid(),
+  code: billingPlanCodeSchema,
+  nameZh: z.string().min(1).max(100),
+  descriptionZh: z.string().max(500),
+  isPublic: z.boolean(),
+  isActive: z.boolean(),
+  draft: adminBillingPlanVersionSchema.nullable(),
+  published: adminBillingPlanVersionSchema.nullable(),
+});
+export type AdminBillingPlan = z.infer<typeof adminBillingPlanSchema>;
+
+export const adminUpdateBillingPlanDraftSchema = z.object({
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{3}$/),
+  monthlyPriceMinor: z.number().int().nonnegative().max(100_000_000),
+  annualPriceMinor: z.number().int().nonnegative().max(1_000_000_000),
+  monthlySubscriptionCredits: z.number().int().nonnegative().max(100_000_000),
+  dailyCredits: z.number().int().nonnegative().max(1_000_000),
+  topUpEligible: z.boolean(),
+  entitlements: billingPlanEntitlementsSchema,
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminUpdateBillingPlanDraft = z.infer<
+  typeof adminUpdateBillingPlanDraftSchema
+>;
+
+export const adminBillingPlanMutationSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminBillingPlanMutation = z.infer<
+  typeof adminBillingPlanMutationSchema
+>;

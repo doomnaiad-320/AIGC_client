@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   adminAgentRunSchema,
   adminAuditEventSchema,
+  adminBillingPlanMutationSchema,
+  adminBillingPlanSchema,
   adminCreditAdjustmentRequestSchema,
   adminCreditAdjustmentResponseSchema,
   adminCreditTransactionSchema,
@@ -13,6 +15,7 @@ import {
   adminPasswordResetResponseSchema,
   adminPlatformAdminMutationRequestSchema,
   adminPlatformAdminSchema,
+  adminUpdateBillingPlanDraftSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
   adminUserDetailSchema,
@@ -47,6 +50,10 @@ const workspaceListQuerySchema = z.object({
 
 const workspaceParamsSchema = z.object({
   workspaceId: z.string().uuid(),
+});
+
+const billingPlanParamsSchema = z.object({
+  planCode: z.enum(["free", "pro", "team", "enterprise"]),
 });
 
 export async function registerAdminRoutes(
@@ -344,6 +351,85 @@ export async function registerAdminRoutes(
       return sendAdminError(error, reply);
     }
   });
+
+  app.get("/api/admin/billing/plans", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const plans = await options.adminService.listBillingPlans();
+      return reply.code(200).send({
+        plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
+      });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.patch(
+    "/api/admin/billing/plans/:planCode/draft",
+    async (request, reply) => {
+      try {
+        const user = await requirePlatformAdmin(request, reply, options);
+        if (!user) return;
+        const params = billingPlanParamsSchema.parse(request.params);
+        const input = adminUpdateBillingPlanDraftSchema.parse(request.body);
+        const plans = await options.adminService.updateBillingPlanDraft(
+          user.id,
+          params.planCode,
+          input,
+        );
+        return reply.code(200).send({
+          plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
+        });
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/billing/plans/:planCode/draft",
+    async (request, reply) => {
+      try {
+        const user = await requirePlatformAdmin(request, reply, options);
+        if (!user) return;
+        const params = billingPlanParamsSchema.parse(request.params);
+        const input = adminBillingPlanMutationSchema.parse(request.body);
+        const plans = await options.adminService.createBillingPlanDraft(
+          user.id,
+          params.planCode,
+          input,
+        );
+        return reply.code(201).send({
+          plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
+        });
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/billing/plans/:planCode/publish",
+    async (request, reply) => {
+      try {
+        const user = await requirePlatformAdmin(request, reply, options);
+        if (!user) return;
+        const params = billingPlanParamsSchema.parse(request.params);
+        const input = adminBillingPlanMutationSchema.parse(request.body);
+        const plans = await options.adminService.publishBillingPlan(
+          user.id,
+          params.planCode,
+          input,
+        );
+        return reply.code(200).send({
+          plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
+        });
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
 }
 
 async function requirePlatformAdmin(

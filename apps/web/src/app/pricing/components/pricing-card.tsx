@@ -1,6 +1,5 @@
 "use client";
 
-import type { SubscriptionPlan } from "@loomic/shared";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Crown, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +18,7 @@ interface PricingCardProps {
   index: number;
   currentPlan?: string | null | undefined;
   onCheckout?: (
-    plan: SubscriptionPlan,
+    plan: string,
     billingPeriod: BillingPeriod,
   ) => Promise<void> | undefined;
 }
@@ -40,7 +39,7 @@ export function PricingCard({
     if (!onCheckout || tier.id === "free") return;
     setLoading(true);
     try {
-      await onCheckout(tier.id as SubscriptionPlan, billingPeriod);
+      await onCheckout(tier.id, billingPeriod);
     } finally {
       setLoading(false);
     }
@@ -160,11 +159,11 @@ export function PricingCard({
             className="flex items-baseline gap-1"
           >
             <span className="text-foreground text-4xl font-bold">${price}</span>
-            <span className="text-muted-foreground text-sm">/month</span>
+            <span className="text-muted-foreground text-sm">/月</span>
           </motion.div>
         </AnimatePresence>
         {billingPeriod === "yearly" && tier.yearlyPrice > 0 && (
-          <p className="text-muted-foreground mt-1 text-xs">Billed annually</p>
+          <p className="text-muted-foreground mt-1 text-xs">按年一次性计费</p>
         )}
       </div>
 
