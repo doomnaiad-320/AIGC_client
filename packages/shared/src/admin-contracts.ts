@@ -227,6 +227,7 @@ export const adminCreditAdjustmentRequestSchema = z.object({
   targetUserId: z.string().uuid(),
   amount: z.number().int().min(1).max(500_000),
   reason: z.string().trim().min(3).max(500),
+  idempotencyKey: z.string().uuid(),
 });
 export type AdminCreditAdjustmentRequest = z.infer<
   typeof adminCreditAdjustmentRequestSchema

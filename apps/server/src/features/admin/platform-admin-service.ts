@@ -974,6 +974,7 @@ export function createPlatformAdminService(options: {
         p_actor_user_id: actorUserId,
         p_amount: input.amount,
         p_reason: input.reason,
+        p_idempotency_key: input.idempotencyKey,
       });
 
       if (error || !data) {

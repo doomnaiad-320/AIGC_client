@@ -545,6 +545,7 @@ export default function AdminPage() {
         targetUserId: adjustedUser.id,
         amount,
         reason: adjustmentReason.trim(),
+        idempotencyKey: crypto.randomUUID(),
       });
       closeAdjustmentDialog();
       await load(search, userStatusFilter);

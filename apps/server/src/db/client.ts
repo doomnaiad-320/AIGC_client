@@ -592,7 +592,7 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
       };
     case "admin_adjust_credits":
       return {
-        sql: "select public.admin_adjust_credits($1::uuid, $2::uuid, $3::uuid, $4::int, $5::text) as result",
+        sql: "select public.admin_adjust_credits($1::uuid, $2::uuid, $3::uuid, $4::int, $5::text, $6::text) as result",
         unwrapColumn: "result",
         values: [
           args.p_workspace_id,
@@ -600,6 +600,7 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
           args.p_actor_user_id,
           args.p_amount,
           args.p_reason,
+          args.p_idempotency_key,
         ],
       };
     default:
