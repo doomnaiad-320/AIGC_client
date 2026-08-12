@@ -547,6 +547,44 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
         unwrapColumn: "result",
         values: [args.p_workspace_id, args.p_plan, args.p_credits],
       };
+    case "billing_get_credit_balance":
+      return {
+        sql: "select public.billing_get_credit_balance($1::uuid) as result",
+        unwrapColumn: "result",
+        values: [args.p_workspace_id],
+      };
+    case "billing_ensure_daily_credit_grant":
+      return {
+        sql: "select public.billing_ensure_daily_credit_grant($1::uuid) as result",
+        unwrapColumn: "result",
+        values: [args.p_workspace_id],
+      };
+    case "billing_deduct_credits":
+      return {
+        sql: "select public.billing_deduct_credits($1::uuid, $2::uuid, $3::int, $4::uuid, $5::text, $6::text) as result",
+        unwrapColumn: "result",
+        values: [
+          args.p_workspace_id,
+          args.p_user_id,
+          args.p_amount,
+          args.p_job_id ?? null,
+          args.p_description ?? null,
+          args.p_idempotency_key,
+        ],
+      };
+    case "billing_refund_credits":
+      return {
+        sql: "select public.billing_refund_credits($1::uuid, $2::uuid, $3::int, $4::uuid, $5::text, $6::text) as result",
+        unwrapColumn: "result",
+        values: [
+          args.p_workspace_id,
+          args.p_user_id,
+          args.p_amount,
+          args.p_job_id,
+          args.p_description ?? null,
+          args.p_idempotency_key,
+        ],
+      };
     case "increment_job_attempt":
       return {
         sql: "select * from public.increment_job_attempt($1::uuid)",

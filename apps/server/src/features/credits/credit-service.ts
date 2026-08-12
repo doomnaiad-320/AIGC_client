@@ -1,4 +1,6 @@
 // @credits-system — Core credit operations: balance queries, deductions, refunds, grants, plan updates
+import { randomUUID } from "node:crypto";
+
 import type {
   BillingPeriod,
   CreditTransaction,
@@ -38,6 +40,10 @@ export type BalanceInfo = {
   balance: number;
   plan: SubscriptionPlan;
   dailyClaimed: boolean;
+  dailyBalance?: number;
+  subscriptionBalance?: number;
+  topUpBalance?: number;
+  permanentBalance?: number;
 };
 
 export type SubscriptionInfo = {
@@ -86,28 +92,18 @@ export function createCreditService(options: {
     async getBalance(workspaceId) {
       const admin = options.getAdminClient();
 
-      const [balanceResult, subscriptionResult, dailyClaimResult] =
-        await Promise.all([
-          admin
-            .from("credit_balances")
-            .select("balance")
-            .eq("workspace_id", workspaceId)
-            .maybeSingle(),
-          admin
-            .from("subscriptions")
-            .select("plan")
-            .eq("workspace_id", workspaceId)
-            .maybeSingle(),
-          admin.rpc<boolean>("has_daily_credit_claim", {
-            p_workspace_id: workspaceId,
-          }),
-        ]);
+      const [balanceResult, subscriptionResult] = await Promise.all([
+        admin.rpc<Record<string, unknown>>("billing_get_credit_balance", {
+          p_workspace_id: workspaceId,
+        }),
+        admin
+          .from("subscriptions")
+          .select("plan")
+          .eq("workspace_id", workspaceId)
+          .maybeSingle(),
+      ]);
 
-      if (
-        balanceResult.error ||
-        subscriptionResult.error ||
-        dailyClaimResult.error
-      ) {
+      if (balanceResult.error || subscriptionResult.error) {
         throw new CreditServiceError(
           "credit_query_failed",
           "Failed to query credit balance.",
@@ -115,22 +111,32 @@ export function createCreditService(options: {
         );
       }
 
+      const billingBalance = balanceResult.data ?? {};
       return {
-        balance: balanceResult.data?.balance ?? 0,
+        balance: Number(billingBalance.balance ?? 0),
         plan: (subscriptionResult.data?.plan as SubscriptionPlan) ?? "free",
-        dailyClaimed: dailyClaimResult.data === true,
+        dailyClaimed: true,
+        dailyBalance: Number(billingBalance.daily_balance ?? 0),
+        subscriptionBalance: Number(
+          billingBalance.subscription_balance ?? 0,
+        ),
+        topUpBalance: Number(billingBalance.top_up_balance ?? 0),
+        permanentBalance: Number(billingBalance.permanent_balance ?? 0),
       };
     },
 
     async deductCredits(workspaceId, userId, amount, jobId, description) {
       const admin = options.getAdminClient();
 
-      const { data, error } = await admin.rpc("deduct_credits", {
+      const { data, error } = await admin.rpc("billing_deduct_credits", {
         p_workspace_id: workspaceId,
         p_user_id: userId,
         p_amount: amount,
         p_job_id: (jobId ?? null) as string,
         p_description: (description ?? null) as string,
+        p_idempotency_key: jobId
+          ? `job:${jobId}:deduct`
+          : `direct:${randomUUID()}:deduct`,
       });
 
       if (error) {
@@ -154,12 +160,13 @@ export function createCreditService(options: {
     async refundCredits(workspaceId, userId, amount, jobId, description) {
       const admin = options.getAdminClient();
 
-      const { data, error } = await admin.rpc("refund_credits", {
+      const { data, error } = await admin.rpc("billing_refund_credits", {
         p_workspace_id: workspaceId,
         p_user_id: userId,
         p_amount: amount,
         p_job_id: jobId ?? null,
         p_description: description ?? null,
+        p_idempotency_key: `job:${jobId}:refund`,
       });
 
       if (error) {
@@ -176,33 +183,12 @@ export function createCreditService(options: {
     async claimDailyCredits(workspaceId) {
       const admin = options.getAdminClient();
 
-      // Determine the workspace's plan
-      const { data: sub, error: subError } = await admin
-        .from("subscriptions")
-        .select("plan")
-        .eq("workspace_id", workspaceId)
-        .maybeSingle();
-
-      if (subError) {
-        throw new CreditServiceError(
-          "credit_claim_failed",
-          "Failed to query subscription.",
-          500,
-        );
-      }
-
-      const plan = (sub?.plan as SubscriptionPlan) ?? "free";
-      const config = PLAN_CONFIGS[plan];
-
-      if (config.dailyCredits <= 0) {
-        return { success: false };
-      }
-
-      const { data: claimed, error: claimError } = await admin.rpc(
-        "claim_daily_credits",
+      const { data: grant, error: claimError } = await admin.rpc<
+        Record<string, unknown>
+      >(
+        "billing_ensure_daily_credit_grant",
         {
           p_workspace_id: workspaceId,
-          p_amount: config.dailyCredits,
         },
       );
 
@@ -214,20 +200,9 @@ export function createCreditService(options: {
         );
       }
 
-      if (!claimed) {
-        return { success: false };
-      }
-
-      // Fetch updated balance
-      const { data: balanceRow } = await admin
-        .from("credit_balances")
-        .select("balance")
-        .eq("workspace_id", workspaceId)
-        .maybeSingle();
-
       return {
-        success: true,
-        balance: balanceRow?.balance ?? 0,
+        success: grant?.created === true,
+        balance: Number(grant?.balance ?? 0),
       };
     },
 

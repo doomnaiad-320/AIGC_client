@@ -12,6 +12,7 @@
     "admin:grant": "node scripts/grant-platform-admin.mjs",
     "admin:revoke": "node scripts/grant-platform-admin.mjs --revoke",
     "test:postgres-smoke": "node scripts/smoke-postgres-local.mjs",
+    "test:billing-ledger": "node scripts/test-billing-ledger-local.mjs",
     "test:workspace": "node --test tests/workspace.test.mjs",
     "test:packages": "turbo run test",
     "test": "pnpm run test:workspace && pnpm run test:packages",
