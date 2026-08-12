@@ -28,6 +28,9 @@ const ADMIN_ERROR_MESSAGES: Record<string, string> = {
   admin_workspace_not_found: "未找到该工作区。",
   admin_query_failed: "无法查询管理后台数据。",
   admin_user_update_failed: "无法更新用户资料。",
+  admin_user_plan_update_failed: "无法更新用户套餐。",
+  admin_subscription_managed_externally:
+    "该用户存在有效的在线订阅，请通过支付平台变更套餐。",
   admin_user_status_update_failed: "无法更新用户状态。",
   admin_password_reset_failed: "无法生成密码重置令牌。",
   admin_platform_admin_update_failed: "无法更新平台管理员权限。",

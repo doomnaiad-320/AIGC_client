@@ -98,11 +98,15 @@ export const adminUpdateUserRequestSchema = z
   .object({
     displayName: z.string().trim().min(1).max(80).optional(),
     email: z.string().trim().email().optional(),
+    plan: subscriptionPlanSchema.optional(),
     reason: z.string().trim().min(3).max(500),
   })
   .refine(
-    (value) => value.displayName !== undefined || value.email !== undefined,
-    { message: "Provide an email or display name." },
+    (value) =>
+      value.displayName !== undefined ||
+      value.email !== undefined ||
+      value.plan !== undefined,
+    { message: "Provide an email, display name, or plan." },
   );
 export type AdminUpdateUserRequest = z.infer<
   typeof adminUpdateUserRequestSchema

@@ -1,10 +1,14 @@
 "use client";
 
+import type { SubscriptionPlan } from "@loomic/shared";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Crown, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import type { BillingPeriod, PricingTier } from "./pricing-data";
 import { cardReveal } from "./pricing-data";
@@ -14,7 +18,10 @@ interface PricingCardProps {
   billingPeriod: BillingPeriod;
   index: number;
   currentPlan?: string | null | undefined;
-  onCheckout?: (plan: string, billingPeriod: BillingPeriod) => Promise<void> | undefined;
+  onCheckout?: (
+    plan: SubscriptionPlan,
+    billingPeriod: BillingPeriod,
+  ) => Promise<void> | undefined;
 }
 
 export function PricingCard({
@@ -30,10 +37,10 @@ export function PricingCard({
   const [loading, setLoading] = useState(false);
 
   async function handleCheckout() {
-    if (!onCheckout || tier.id === "free" || tier.id === "business") return;
+    if (!onCheckout || tier.id === "free") return;
     setLoading(true);
     try {
-      await onCheckout(tier.id, billingPeriod);
+      await onCheckout(tier.id as SubscriptionPlan, billingPeriod);
     } finally {
       setLoading(false);
     }
@@ -49,8 +56,26 @@ export function PricingCard({
           disabled
         >
           <Crown className="mr-1.5 h-4 w-4" />
-          Current Plan
+          当前套餐
         </Button>
+      );
+    }
+
+    if (tier.id === "free") {
+      const freeHref =
+        currentPlan && currentPlan !== "free"
+          ? "/settings?tab=billing"
+          : "/register";
+      return (
+        <Link
+          href={freeHref}
+          className={cn(
+            buttonVariants({ size: "lg", variant: "outline" }),
+            "w-full",
+          )}
+        >
+          {currentPlan && currentPlan !== "free" ? "管理并取消订阅" : tier.cta}
+        </Link>
       );
     }
 
@@ -83,12 +108,8 @@ export function PricingCard({
         className="w-full cursor-pointer"
         size="lg"
         variant={tier.ctaVariant === "outline" ? "outline" : "default"}
-        disabled={loading || (tier.id === "free" && !onCheckout)}
-        onClick={
-          tier.id === "free" || tier.id === "business"
-            ? undefined
-            : handleCheckout
-        }
+        disabled={loading}
+        onClick={handleCheckout}
       >
         {buttonContent}
       </Button>
@@ -105,14 +126,14 @@ export function PricingCard({
           ? "shadow-card-hover z-10 scale-[1.02] border-2"
           : "shadow-card hover:shadow-card-hover border"
       }`}
-      style={
-        tier.highlighted
-          ? {
+      {...(tier.highlighted
+        ? {
+            style: {
               borderColor: "oklch(0.90 0.17 115)",
               boxShadow: "0 0 20px oklch(0.90 0.17 115 / 0.15)",
-            }
-          : undefined
-      }
+            },
+          }
+        : {})}
     >
       {/* Badge */}
       {tier.badge && (
@@ -138,9 +159,7 @@ export function PricingCard({
             transition={{ duration: 0.25 }}
             className="flex items-baseline gap-1"
           >
-            <span className="text-foreground text-4xl font-bold">
-              ${price}
-            </span>
+            <span className="text-foreground text-4xl font-bold">${price}</span>
             <span className="text-muted-foreground text-sm">/month</span>
           </motion.div>
         </AnimatePresence>

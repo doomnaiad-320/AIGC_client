@@ -531,6 +531,18 @@ describe("@loomic/shared contracts", () => {
         reason: "Support request verification",
       }).success,
     ).toBe(true);
+    expect(
+      adminUpdateUserRequestSchema.safeParse({
+        plan: "ultra",
+        reason: "Approved account entitlement change",
+      }).success,
+    ).toBe(true);
+    expect(
+      adminUpdateUserRequestSchema.safeParse({
+        plan: "enterprise",
+        reason: "Approved account entitlement change",
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts only supported administrator user statuses", () => {

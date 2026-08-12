@@ -198,6 +198,32 @@ describe("admin routes", () => {
     await app.close();
   });
 
+  it("updates a user's plan through the protected user edit endpoint", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/users/22222222-2222-4222-8222-222222222222",
+      payload: {
+        plan: "ultra",
+        reason: "Approved account entitlement change",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(service.updateUser).toHaveBeenCalledWith(
+      adminUser.id,
+      "22222222-2222-4222-8222-222222222222",
+      {
+        plan: "ultra",
+        reason: "Approved account entitlement change",
+      },
+    );
+    await app.close();
+  });
+
   it("requires a reason before issuing a password reset", async () => {
     const service = makeService(true);
     const app = await makeApp(

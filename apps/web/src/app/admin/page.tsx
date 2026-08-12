@@ -12,6 +12,7 @@ import type {
   AdminUserStatus,
   AdminWorkspace,
   AdminWorkspaceDetail,
+  SubscriptionPlan,
 } from "@loomic/shared";
 import {
   Activity,
@@ -187,6 +188,7 @@ export default function AdminPage() {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPlan, setEditPlan] = useState<SubscriptionPlan>("free");
   const [editReason, setEditReason] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -327,6 +329,7 @@ export default function AdminPage() {
     setEditingUser(user);
     setEditDisplayName(user.displayName);
     setEditEmail(user.email);
+    setEditPlan(user.plan);
     setEditReason("");
     setEditError(null);
   }
@@ -335,6 +338,7 @@ export default function AdminPage() {
     setEditingUser(null);
     setEditDisplayName("");
     setEditEmail("");
+    setEditPlan("free");
     setEditReason("");
     setEditError(null);
   }
@@ -348,18 +352,25 @@ export default function AdminPage() {
       setEditError("请填写本次资料变更的原因。");
       return;
     }
-    if (!editDisplayName.trim() && !editEmail.trim()) {
-      setEditError("请输入用户名或邮箱地址。");
+    const profileChanged =
+      editDisplayName.trim() !== target.displayName ||
+      editEmail.trim().toLowerCase() !== target.email.toLowerCase();
+    const planChanged = editPlan !== target.plan;
+    if (!profileChanged && !planChanged) {
+      setEditError("请至少修改一项用户资料或套餐。");
       return;
     }
     setSavingEdit(true);
     setEditError(null);
     try {
       const result = await updateAdminUser(token, target.id, {
-        ...(editDisplayName.trim()
-          ? { displayName: editDisplayName.trim() }
+        ...(profileChanged
+          ? {
+              displayName: editDisplayName.trim(),
+              email: editEmail.trim(),
+            }
           : {}),
-        ...(editEmail.trim() ? { email: editEmail.trim() } : {}),
+        ...(planChanged ? { plan: editPlan } : {}),
         reason: editReason.trim(),
       });
       setSelectedUserDetail(result.detail);
@@ -851,11 +862,13 @@ export default function AdminPage() {
         user={editingUser}
         displayName={editDisplayName}
         email={editEmail}
+        plan={editPlan}
         reason={editReason}
         error={editError}
         saving={savingEdit}
         onDisplayNameChange={setEditDisplayName}
         onEmailChange={setEditEmail}
+        onPlanChange={setEditPlan}
         onReasonChange={setEditReason}
         onClose={closeEditUser}
         onSubmit={submitEditUser}
@@ -1549,11 +1562,13 @@ function EditUserDialog({
   user,
   displayName,
   email,
+  plan,
   reason,
   error,
   saving,
   onDisplayNameChange,
   onEmailChange,
+  onPlanChange,
   onReasonChange,
   onClose,
   onSubmit,
@@ -1561,11 +1576,13 @@ function EditUserDialog({
   user: AdminUser | null;
   displayName: string;
   email: string;
+  plan: SubscriptionPlan;
   reason: string;
   error: string | null;
   saving: boolean;
   onDisplayNameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
+  onPlanChange: (value: SubscriptionPlan) => void;
   onReasonChange: (value: string) => void;
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
@@ -1599,6 +1616,26 @@ function EditUserDialog({
                 type="email"
                 value={email}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-edit-plan">套餐分组</Label>
+              <select
+                id="admin-edit-plan"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                onChange={(event) =>
+                  onPlanChange(event.target.value as SubscriptionPlan)
+                }
+                value={plan}
+              >
+                <option value="free">免费版 · 每日 50 点</option>
+                <option value="starter">入门版 · 每月 1,200 点</option>
+                <option value="pro">专业版 · 每月 5,000 点</option>
+                <option value="ultra">旗舰版 · 每月 15,000 点</option>
+                <option value="business">企业版 · 每月 50,000 点</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                修改套餐只调整功能分组，不会自动增加或扣除点数。有效在线订阅需在支付平台变更。
+              </p>
             </div>
             <ReasonField
               id="admin-edit-reason"

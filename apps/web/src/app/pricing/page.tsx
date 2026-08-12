@@ -1,21 +1,22 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import type { SubscriptionPlan } from "@loomic/shared";
+import { BadgeAlert, Settings } from "lucide-react";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { useCallback, useState } from "react";
 
-import { useAuth } from "@/lib/auth-context";
-import { createCheckout } from "@/lib/payments-api";
 import { useSubscription } from "@/hooks/use-subscription";
+import { useAuth } from "@/lib/auth-context";
+import { changePlan, createCheckout } from "@/lib/payments-api";
 
-import type { BillingPeriod } from "./components/pricing-data";
-import { PricingNav } from "./components/pricing-nav";
-import { PricingHero } from "./components/pricing-hero";
-import { PricingToggle } from "./components/pricing-toggle";
 import { PricingCards } from "./components/pricing-cards";
 import { PricingComparison } from "./components/pricing-comparison";
-import { PricingFAQ } from "./components/pricing-faq";
 import { PricingCTA } from "./components/pricing-cta";
+import type { BillingPeriod } from "./components/pricing-data";
+import { PricingFAQ } from "./components/pricing-faq";
+import { PricingHero } from "./components/pricing-hero";
+import { PricingNav } from "./components/pricing-nav";
+import { PricingToggle } from "./components/pricing-toggle";
 
 function openLemonCheckout(url: string) {
   if (window.LemonSqueezy?.Url?.Open) {
@@ -28,21 +29,39 @@ function openLemonCheckout(url: string) {
 export default function PricingPage() {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("yearly");
   const { session } = useAuth();
-  const { subscription } = useSubscription();
+  const { subscription, refresh: refreshSubscription } = useSubscription();
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const handleCheckout = useCallback(
-    async (plan: string, period: BillingPeriod) => {
+    async (plan: SubscriptionPlan, period: BillingPeriod) => {
       const token = session?.access_token;
       if (!token) {
-        // Redirect unauthenticated users to login
         window.location.href = "/login?redirect=/pricing";
         return;
       }
 
-      const { checkoutUrl } = await createCheckout(token, plan, period);
-      openLemonCheckout(checkoutUrl);
+      setCheckoutError(null);
+      try {
+        if (subscription?.lemonSqueezySubscriptionId) {
+          await changePlan(token, plan, period);
+          await refreshSubscription();
+          return;
+        }
+        const { checkoutUrl } = await createCheckout(token, plan, period);
+        openLemonCheckout(checkoutUrl);
+      } catch (error) {
+        setCheckoutError(
+          error instanceof Error
+            ? error.message
+            : "暂时无法发起支付，请稍后重试。",
+        );
+      }
     },
-    [session?.access_token],
+    [
+      refreshSubscription,
+      session?.access_token,
+      subscription?.lemonSqueezySubscriptionId,
+    ],
   );
 
   const hasActiveSubscription =
@@ -55,11 +74,10 @@ export default function PricingPage() {
       <main>
         <PricingHero />
 
-        {/* Manage subscription banner */}
         {hasActiveSubscription && (
           <div className="mx-auto mb-6 flex max-w-md items-center justify-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
             <span className="text-muted-foreground">
-              You are on the{" "}
+              当前套餐：{" "}
               <span className="font-medium text-foreground capitalize">
                 {subscription.plan}
               </span>{" "}
@@ -70,8 +88,18 @@ export default function PricingPage() {
               className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
             >
               <Settings className="h-3.5 w-3.5" />
-              Manage
+              管理订阅
             </Link>
+          </div>
+        )}
+
+        {checkoutError && (
+          <div
+            className="mx-auto mb-6 flex max-w-2xl items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            role="alert"
+          >
+            <BadgeAlert className="mt-0.5 size-4 shrink-0" />
+            <span>{checkoutError}</span>
           </div>
         )}
 

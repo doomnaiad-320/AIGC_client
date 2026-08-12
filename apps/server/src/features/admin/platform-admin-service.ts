@@ -33,6 +33,8 @@ export class PlatformAdminServiceError extends Error {
       | "admin_workspace_not_found"
       | "admin_query_failed"
       | "admin_user_update_failed"
+      | "admin_user_plan_update_failed"
+      | "admin_subscription_managed_externally"
       | "admin_user_status_update_failed"
       | "admin_password_reset_failed"
       | "admin_platform_admin_update_failed"
@@ -408,15 +410,40 @@ export function createPlatformAdminService(options: {
     async updateUser(actorUserId, userId, input) {
       const email = input.email?.trim().toLowerCase() ?? null;
       const displayName = input.displayName?.trim() ?? null;
-      const { data, error } = await getAdmin().query<{ id: string }>(
+      const plan = input.plan ?? null;
+      const { data, error } = await getAdmin().query<{
+        activeSubscriptionId: string | null;
+        id: string;
+        planBlocked: boolean;
+        workspaceId: string | null;
+      }>(
         `
           with target as materialized (
             select
               u.id,
               u.email,
-              coalesce(p.display_name, split_part(u.email, '@', 1)) as display_name
+              coalesce(p.display_name, split_part(u.email, '@', 1)) as display_name,
+              w.id as workspace_id,
+              coalesce(s.plan::text, 'free') as plan_before,
+              s.lemon_squeezy_subscription_id as active_subscription_id,
+              (
+                $5::public.subscription_plan is not null
+                and $5::text is distinct from coalesce(s.plan::text, 'free')
+                and (
+                  w.id is null
+                  or s.lemon_squeezy_subscription_id is not null
+                )
+              ) as plan_blocked
             from public.app_users u
             left join public.profiles p on p.id = u.id
+            left join lateral (
+              select id
+              from public.workspaces
+              where owner_user_id = u.id
+              order by created_at asc, id asc
+              limit 1
+            ) w on true
+            left join public.subscriptions s on s.workspace_id = w.id
             where u.id = $2::uuid
             for update of u
           ),
@@ -440,6 +467,7 @@ export function createPlatformAdminService(options: {
                 updated_at = now()
             from target t
             where u.id = t.id
+              and not t.plan_blocked
             returning u.id, u.email
           ),
           synced_profile as (
@@ -456,7 +484,24 @@ export function createPlatformAdminService(options: {
                 updated_at = now()
             returning id, email, display_name
           ),
-          audit as (
+          updated_subscription as (
+            insert into public.subscriptions (workspace_id, plan, updated_at)
+            select t.workspace_id, $5::public.subscription_plan, now()
+            from target t
+            where t.workspace_id is not null
+              and not t.plan_blocked
+              and $5::public.subscription_plan is not null
+              and $5::text is distinct from t.plan_before
+            on conflict (workspace_id) do update
+            set plan = excluded.plan,
+                billing_period = null,
+                current_period_start = null,
+                current_period_end = null,
+                canceled_at = null,
+                updated_at = now()
+            returning workspace_id, plan::text
+          ),
+          profile_audit as (
             insert into public.admin_audit_events (
               actor_user_id,
               action,
@@ -472,14 +517,44 @@ export function createPlatformAdminService(options: {
                 'email_after', p.email,
                 'display_name_before', t.display_name,
                 'display_name_after', p.display_name,
-                'reason', $5::text
+                'reason', $6::text
               )
             from target t
             join synced_profile p on p.id = t.id
+            where t.email is distinct from p.email
+               or t.display_name is distinct from p.display_name
+          ),
+          plan_audit as (
+            insert into public.admin_audit_events (
+              actor_user_id,
+              action,
+              target_user_id,
+              target_workspace_id,
+              metadata
+            )
+            select
+              $1::uuid,
+              'subscription.plan_changed',
+              t.id,
+              u.workspace_id,
+              jsonb_build_object(
+                'plan_before', t.plan_before,
+                'plan_after', u.plan,
+                'reason', $6::text,
+                'credits_changed', false
+              )
+            from target t
+            join updated_subscription u on u.workspace_id = t.workspace_id
           )
-          select id from synced_profile
+          select
+            t.id,
+            t.workspace_id as "workspaceId",
+            t.active_subscription_id as "activeSubscriptionId",
+            t.plan_blocked as "planBlocked"
+          from target t
+          left join synced_profile p on p.id = t.id
         `,
-        [actorUserId, userId, email, displayName, input.reason],
+        [actorUserId, userId, email, displayName, plan, input.reason],
       );
       if (error) {
         const duplicateEmail = error.code === "23505";
@@ -491,7 +566,22 @@ export function createPlatformAdminService(options: {
           duplicateEmail ? 409 : 500,
         );
       }
-      if (!data?.[0]) throw userNotFound();
+      const result = data?.[0];
+      if (!result) throw userNotFound();
+      if (result.planBlocked) {
+        if (result.activeSubscriptionId) {
+          throw new PlatformAdminServiceError(
+            "admin_subscription_managed_externally",
+            "This plan is managed by an active Lemon Squeezy subscription.",
+            409,
+          );
+        }
+        throw new PlatformAdminServiceError(
+          "admin_user_plan_update_failed",
+          "The user does not own a workspace.",
+          400,
+        );
+      }
       if (email) options.onUserAuthChanged?.(userId);
       return service.getUserDetail(userId);
     },

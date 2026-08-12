@@ -144,7 +144,7 @@ export const pricingTiers: PricingTier[] = [
       "专属客户经理",
       "SLA 保障",
     ],
-    cta: "联系销售",
+    cta: "选择 Business",
     ctaVariant: "outline",
   },
 ];
