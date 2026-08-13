@@ -450,14 +450,12 @@ function PlanEditor({
           description="用户购买价格和周期内可使用的基础点数。"
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label="货币"
-              value={form.currency}
-              maxLength={3}
-              onChange={(value) =>
-                onFormChange({ ...form, currency: value.toUpperCase() })
-              }
-            />
+            <div className="space-y-2">
+              <Label>货币</Label>
+              <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+                USD
+              </div>
+            </div>
             <div className="hidden sm:block" />
             <MoneyField
               label="月付价格"

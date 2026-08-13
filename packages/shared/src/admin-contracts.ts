@@ -278,7 +278,7 @@ export const adminBillingPlanVersionSchema = z.object({
   id: z.string().uuid(),
   version: z.number().int().positive(),
   status: billingPlanVersionStatusSchema,
-  currency: z.string().regex(/^[A-Z]{3}$/),
+  currency: z.literal("USD"),
   monthlyPriceMinor: z.number().int().nonnegative(),
   annualPriceMinor: z.number().int().nonnegative(),
   monthlySubscriptionCredits: z.number().int().nonnegative(),
@@ -328,10 +328,7 @@ export const adminBillingOverviewSchema = z.object({
 export type AdminBillingOverview = z.infer<typeof adminBillingOverviewSchema>;
 
 export const adminUpdateBillingPlanDraftSchema = z.object({
-  currency: z
-    .string()
-    .trim()
-    .regex(/^[A-Z]{3}$/),
+  currency: z.literal("USD"),
   monthlyPriceMinor: z.number().int().nonnegative().max(100_000_000),
   annualPriceMinor: z.number().int().nonnegative().max(1_000_000_000),
   monthlySubscriptionCredits: z.number().int().nonnegative().max(100_000_000),

@@ -5,12 +5,14 @@ import type { ZodType } from "zod";
 
 import {
   type Database,
+  adminUpdateBillingPlanDraftSchema,
   adminCreditAdjustmentRequestSchema,
   adminPasswordResetRequestSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
   errorCodeValues,
   healthResponseSchema,
+  publishedBillingPlanSchema,
   runCancelResponseSchema,
   runCreateRequestSchema,
   runCreateResponseSchema,
@@ -585,6 +587,46 @@ describe("@loomic/shared contracts", () => {
         amount: -100,
       }).success,
     ).toBe(false);
+  });
+
+  it("uses USD as the only billing currency", () => {
+    const draft = {
+      currency: "USD",
+      monthlyPriceMinor: 3900,
+      annualPriceMinor: 34800,
+      monthlySubscriptionCredits: 5000,
+      dailyCredits: 0,
+      topUpEligible: true,
+      entitlements: {
+        maxConcurrentJobs: 4,
+        allowedModelGroups: ["free", "standard", "advanced"],
+        maxImageQuality: "hd",
+        maxVideoResolution: "1080p",
+        maxProjects: 50,
+        maxBrandKits: 10,
+        maxTeamSeats: 1,
+        watermark: false,
+        queuePriority: "standard",
+        apiEnabled: false,
+      },
+      reason: "Update plan pricing",
+    };
+
+    expect(adminUpdateBillingPlanDraftSchema.safeParse(draft).success).toBe(true);
+    expect(
+      adminUpdateBillingPlanDraftSchema.safeParse({
+        ...draft,
+        currency: "EUR",
+      }).success,
+    ).toBe(false);
+    expect(
+      publishedBillingPlanSchema.safeParse({
+        code: "pro",
+        nameZh: "专业版",
+        descriptionZh: "专业创作者套餐",
+        ...draft,
+      }).success,
+    ).toBe(true);
   });
 
   it("tracks official langgraph persistence schema typings", () => {
