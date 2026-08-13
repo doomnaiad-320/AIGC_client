@@ -9,7 +9,7 @@ import {
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
 
-import type { AuthenticatedUser, RequestAuthenticator } from "../auth/user.js";
+import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import type { CreditService } from "../features/credits/credit-service.js";
 import { CreditServiceError } from "../features/credits/credit-service.js";
@@ -17,9 +17,6 @@ import type { TierGuard } from "../features/credits/tier-guard.js";
 import { TierGuardError } from "../features/credits/tier-guard.js";
 import type { JobService } from "../features/jobs/job-service.js";
 import { JobServiceError } from "../features/jobs/job-service.js";
-import type { UploadService } from "../features/uploads/upload-service.js";
-import { generateImage } from "../generation/image-generation.js";
-import { resolveImageProviderName } from "../generation/providers/registry.js";
 
 const generateImageRequestSchema = z.object({
   prompt: z.string().min(1),
@@ -44,7 +41,6 @@ export async function registerGenerateRoutes(
     creditService?: CreditService;
     jobService?: JobService;
     tierGuard?: TierGuard;
-    uploadService: UploadService;
     viewerService: ViewerService;
   },
 ) {
@@ -77,6 +73,18 @@ export async function registerGenerateRoutes(
 
     const model = payload.model ?? "black-forest-labs/flux-kontext-pro";
 
+    if (!options.jobService) {
+      return reply.code(503).send(
+        applicationErrorResponseSchema.parse({
+          error: {
+            code: "service_unavailable",
+            message:
+              "Image generation is not available (job service not configured).",
+          },
+        }),
+      );
+    }
+
     try {
       // ── Tier guard + credit checks ──
       const viewer = await options.viewerService.ensureViewer(user);
@@ -87,47 +95,63 @@ export async function registerGenerateRoutes(
         await options.tierGuard.checkModelAccess(viewer.workspace.id, model);
         // Throws TierGuardError (resolution_not_allowed) if plan doesn't allow this quality
         await options.tierGuard.checkResolution(viewer.workspace.id, quality);
-        await options.tierGuard.checkConcurrency(viewer.workspace.id);
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "image_generation",
           { quality },
         );
+      }
 
-        // Deduct credits before generation
-        if (creditsCost > 0) {
-          await options.creditService.deductCredits(
+      const job = await options.jobService.createJob(user, {
+        workspaceId: viewer.workspace.id,
+        jobType: "image_generation",
+        payload: {
+          prompt: payload.prompt,
+          model,
+          aspect_ratio: payload.aspectRatio ?? "1:1",
+          ...(payload.quality ? { quality: payload.quality } : {}),
+        },
+      });
+
+      if (options.creditService && creditsCost > 0) {
+        try {
+          const txId = await options.creditService.deductCredits(
             viewer.workspace.id,
             user.id,
             creditsCost,
-            undefined,
+            job.id,
             `Direct image generation: ${model}`,
           );
+          await options.jobService.setCreditsInfo(job.id, creditsCost, txId);
+        } catch (deductError) {
+          await options.jobService.cancelJob(user, job.id).catch(() => {});
+          throw deductError;
         }
       }
 
-      const providerName = resolveImageProviderName(model);
-      const result = await generateImage(providerName, {
-        prompt: payload.prompt,
-        model,
-        aspectRatio: payload.aspectRatio ?? "1:1",
-        ...(payload.quality ? { quality: payload.quality } : {}),
-      });
-
-      // Download and persist to local asset storage.
-      const { signedUrl, assetId } = await downloadAndUpload(
-        result.url,
-        result.mimeType,
-        payload.prompt,
-        user,
-        options,
+      const result = await pollJobUntilDone(
+        options.jobService,
+        job.id,
+        2_000,
+        180_000,
       );
 
+      if ("error" in result) {
+        return reply.code(502).send(
+          applicationErrorResponseSchema.parse({
+            error: {
+              code: "generation_failed",
+              message: result.error,
+            },
+          }),
+        );
+      }
+
       return reply.code(200).send({
-        url: signedUrl,
-        assetId,
+        url: result.signed_url,
+        assetId: result.asset_id,
         prompt: payload.prompt,
-        mimeType: result.mimeType,
+        mimeType: result.mime_type,
         width: result.width,
         height: result.height,
       });
@@ -147,20 +171,16 @@ export async function registerGenerateRoutes(
           }),
         );
       }
-
-      const message =
-        error instanceof Error ? error.message : "Image generation failed.";
-
-      if (message.includes("No provider registered")) {
-        return reply.code(400).send(
+      if (error instanceof JobServiceError) {
+        return reply.code(error.statusCode).send(
           applicationErrorResponseSchema.parse({
-            error: {
-              code: "provider_not_configured",
-              message: "Image generation is not available.",
-            },
+            error: { code: error.code, message: error.message },
           }),
         );
       }
+
+      const message =
+        error instanceof Error ? error.message : "Image generation failed.";
 
       return reply.code(502).send(
         applicationErrorResponseSchema.parse({
@@ -229,7 +249,6 @@ export async function registerGenerateRoutes(
             payload.resolution as VideoResolution,
           );
         }
-        await options.tierGuard.checkConcurrency(workspaceId);
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "video_generation",
@@ -304,7 +323,7 @@ export async function registerGenerateRoutes(
         mimeType: result.mime_type,
         width: result.width,
         height: result.height,
-        durationSeconds: result.duration_seconds,
+        durationSeconds: result.duration_seconds ?? 0,
       });
     } catch (error) {
       if (error instanceof TierGuardError) {
@@ -346,16 +365,16 @@ export async function registerGenerateRoutes(
 
 // ── Job polling helper ──────────────────────────────────────
 
-type VideoJobResult = {
+type GenerationJobResult = {
   signed_url: string;
   asset_id: string;
   width: number;
   height: number;
-  duration_seconds: number;
+  duration_seconds?: number;
   mime_type: string;
 };
 
-type PollResult = VideoJobResult | { error: string };
+type PollResult = GenerationJobResult | { error: string };
 
 async function pollJobUntilDone(
   jobService: JobService,
@@ -377,8 +396,10 @@ async function pollJobUntilDone(
         asset_id: (r.asset_id as string) ?? "",
         width: (r.width as number) ?? 0,
         height: (r.height as number) ?? 0,
-        duration_seconds: (r.duration_seconds as number) ?? 0,
-        mime_type: (r.mime_type as string) ?? "video/mp4",
+        ...(typeof r.duration_seconds === "number"
+          ? { duration_seconds: r.duration_seconds }
+          : {}),
+        mime_type: (r.mime_type as string) ?? "application/octet-stream",
       };
     }
 
@@ -401,39 +422,4 @@ async function pollJobUntilDone(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ── Image download + upload helper ──────────────────────────
-
-async function downloadAndUpload(
-  sourceUrl: string,
-  mimeType: string,
-  prompt: string,
-  user: AuthenticatedUser,
-  deps: { uploadService: UploadService; viewerService: ViewerService },
-): Promise<{ signedUrl: string; assetId: string }> {
-  const response = await fetch(sourceUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to download generated image: ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-
-  const ext = mimeType === "image/webp" ? "webp" : "png";
-  const slug = prompt
-    .slice(0, 40)
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  const fileName = `gen-${slug}-${Date.now()}.${ext}`;
-
-  const viewer = await deps.viewerService.ensureViewer(user);
-
-  const result = await deps.uploadService.uploadFile(user, {
-    bucket: "project-assets",
-    fileName,
-    fileBuffer: buffer,
-    mimeType,
-    workspaceId: viewer.workspace.id,
-  });
-
-  return { signedUrl: result.url, assetId: result.asset.id };
 }

@@ -5,24 +5,20 @@ import type {
   Json,
 } from "@loomic/shared";
 
-import type { PgmqClient } from "../../queue/pgmq-client.js";
 import type {
   AuthenticatedUser,
   UserDbClient,
 } from "../../auth/user.js";
 import type { AdminDbClient } from "../../db/client.js";
 
-// Queue name mapping
-const QUEUE_MAP: Record<BackgroundJobType, string> = {
-  image_generation: "image_generation_jobs",
-  video_generation: "video_generation_jobs",
-};
-
 export class JobServiceError extends Error {
   readonly statusCode: number;
   readonly code:
     | "job_not_found"
     | "job_create_failed"
+    | "job_forbidden"
+    | "job_invalid_reference"
+    | "concurrency_limit"
     | "job_query_failed"
     | "job_cancel_failed";
 
@@ -70,7 +66,6 @@ export type JobService = {
 export function createJobService(options: {
   createUserClient: (accessToken: string) => UserDbClient;
   getAdminClient: () => AdminDbClient;
-  pgmq: PgmqClient;
 }): JobService {
   function mapJobRow(row: Record<string, unknown>): BackgroundJob {
     return {
@@ -105,47 +100,50 @@ export function createJobService(options: {
   return {
     async createJob(user, input) {
       const client = options.createUserClient(user.accessToken);
-      const queueName = QUEUE_MAP[input.jobType];
-
-      const { data: job, error } = await client
-        .from("background_jobs")
-        .insert({
-          workspace_id: input.workspaceId,
-          project_id: input.projectId ?? null,
-          canvas_id: input.canvasId ?? null,
-          session_id: input.sessionId ?? null,
-          thread_id: input.threadId ?? null,
-          queue_name: queueName,
-          job_type: input.jobType,
-          payload: input.payload as Json,
-          created_by: user.id,
-        })
-        .select(SELECT_COLS)
-        .single();
+      const { data: job, error } = await client.rpc<Record<string, unknown>>(
+        "create_and_enqueue_generation_job",
+        {
+          p_workspace_id: input.workspaceId,
+          p_project_id: input.projectId ?? null,
+          p_canvas_id: input.canvasId ?? null,
+          p_session_id: input.sessionId ?? null,
+          p_thread_id: input.threadId ?? null,
+          p_job_type: input.jobType,
+          p_payload: input.payload,
+        },
+      );
 
       if (error || !job) {
+        if (error?.message.includes("GENERATION_CONCURRENCY_LIMIT")) {
+          throw new JobServiceError(
+            "concurrency_limit",
+            "Concurrent generation limit reached. Wait for a job to finish or upgrade your plan.",
+            429,
+          );
+        }
+        if (error?.message.includes("GENERATION_WORKSPACE_ACCESS_DENIED")) {
+          throw new JobServiceError(
+            "job_forbidden",
+            "You do not have access to this workspace.",
+            403,
+          );
+        }
+        if (
+          error?.message.includes("GENERATION_PROJECT_WORKSPACE_MISMATCH") ||
+          error?.message.includes("GENERATION_CANVAS_WORKSPACE_MISMATCH") ||
+          error?.message.includes("GENERATION_SESSION_WORKSPACE_MISMATCH") ||
+          error?.message.includes("GENERATION_JOB_TYPE_INVALID") ||
+          error?.message.includes("GENERATION_PAYLOAD_INVALID")
+        ) {
+          throw new JobServiceError(
+            "job_invalid_reference",
+            "The job references resources outside the selected workspace.",
+            400,
+          );
+        }
         throw new JobServiceError(
           "job_create_failed",
-          "Failed to create job record.",
-          500,
-        );
-      }
-
-      // Enqueue to pgmq — rollback on failure
-      try {
-        await options.pgmq.send(queueName, {
-          job_id: job.id,
-          job_type: input.jobType,
-          workspace_id: input.workspaceId,
-          ...(input.canvasId ? { canvas_id: input.canvasId } : {}),
-          ...(input.sessionId ? { session_id: input.sessionId } : {}),
-        });
-      } catch (enqueueErr) {
-        console.error("[job-service] pgmq.send failed:", enqueueErr);
-        await client.from("background_jobs").delete().eq("id", job.id);
-        throw new JobServiceError(
-          "job_create_failed",
-          "Failed to enqueue job.",
+          "Failed to create and enqueue job.",
           500,
         );
       }

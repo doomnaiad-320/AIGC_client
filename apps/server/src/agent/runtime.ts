@@ -476,7 +476,6 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             try {
               await options.tierGuard.checkModelAccess(workspaceId, input.model);
               await options.tierGuard.checkResolution(workspaceId, quality);
-              await options.tierGuard.checkConcurrency(workspaceId);
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);
@@ -511,6 +510,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               title: input.title,
               model: input.model,
               aspect_ratio: input.aspectRatio,
+              ...(input.quality ? { quality: input.quality } : {}),
               ...(input.inputImages ? { input_images: input.inputImages } : {}),
             },
           });
@@ -668,7 +668,6 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               if (input.resolution) {
                 await options.tierGuard.checkVideoResolution(workspaceId, input.resolution as any);
               }
-              await options.tierGuard.checkConcurrency(workspaceId);
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);

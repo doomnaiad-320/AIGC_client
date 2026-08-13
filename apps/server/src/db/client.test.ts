@@ -84,3 +84,66 @@ describe("billing plan RPC mappings", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 });
+
+describe("generation admission RPC mapping", () => {
+  it("maps atomic job creation and queue admission to PostgreSQL", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql === "begin" || sql === "commit") return { rows: [] };
+      if (sql.startsWith("select set_config")) return { rows: [] };
+      return {
+        rows: [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            status: "queued",
+          },
+        ],
+      };
+    });
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as PostgresPool;
+    const client = createAdminDbClient(
+      {
+        appJwtSecret: "test-secret",
+        databaseUrl: "postgresql:///test",
+        postgresPoolMax: 1,
+        serverPublicUrl: "http://localhost:3001",
+        storageRoot: ".test-storage",
+      },
+      pool,
+    );
+
+    const payload = { prompt: "atomic mapping", model: "test-model" };
+    const result = await client.rpc("create_and_enqueue_generation_job", {
+      p_workspace_id: "11111111-1111-4111-8111-111111111111",
+      p_project_id: null,
+      p_canvas_id: null,
+      p_session_id: null,
+      p_thread_id: null,
+      p_job_type: "image_generation",
+      p_payload: payload,
+    });
+
+    expect(result).toEqual({
+      data: {
+        id: "22222222-2222-4222-8222-222222222222",
+        status: "queued",
+      },
+      error: null,
+    });
+    expect(query).toHaveBeenCalledWith(
+      "select * from public.create_and_enqueue_generation_job($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::public.background_job_type, $7::jsonb)",
+      [
+        "11111111-1111-4111-8111-111111111111",
+        null,
+        null,
+        null,
+        null,
+        "image_generation",
+        JSON.stringify(payload),
+      ],
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+});

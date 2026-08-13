@@ -1,4 +1,4 @@
-// @credits-system — Tier enforcement: model access, resolution limits, concurrency guards per plan
+// @credits-system — Tier enforcement: model access and resolution limits per plan
 import type {
   BackgroundJobType,
   BillingErrorCode,
@@ -12,7 +12,6 @@ import {
   getVideoCreditCost,
 } from "@loomic/shared";
 
-import type { AdminDbClient } from "../../db/client.js";
 import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
 import {
   isImageQualityAllowed,
@@ -54,7 +53,6 @@ export type TierGuard = {
     workspaceId: string,
     resolution: VideoResolution,
   ): Promise<void>;
-  checkConcurrency(workspaceId: string): Promise<void>;
   calculateCreditCost(
     modelId: string,
     jobType: BackgroundJobType,
@@ -70,7 +68,6 @@ export type TierGuard = {
 
 export function createTierGuard(options: {
   billingCatalogService: BillingCatalogService;
-  getAdminClient: () => AdminDbClient;
 }): TierGuard {
   return {
     async checkModelAccess(workspaceId, modelId) {
@@ -106,37 +103,6 @@ export function createTierGuard(options: {
           "resolution_not_allowed",
           `当前${config.planName}最高支持“${config.maxVideoResolution}”视频分辨率。`,
           403,
-        );
-      }
-    },
-
-    async checkConcurrency(workspaceId) {
-      const admin = options.getAdminClient();
-      const config =
-        await options.billingCatalogService.getRuntimePlanConfig(workspaceId);
-      const maxConcurrent = config.maxConcurrentJobs;
-
-      const { count, error } = await admin
-        .from("background_jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .in("status", ["queued", "running"]);
-
-      if (error) {
-        // Log but don't block — fail open on query errors
-        console.error(
-          "[tier-guard] Failed to check concurrency:",
-          error.message,
-        );
-        return;
-      }
-
-      const activeCount = count ?? 0;
-      if (activeCount >= maxConcurrent) {
-        throw new TierGuardError(
-          "concurrency_limit",
-          `Concurrent job limit reached (${activeCount}/${maxConcurrent}). Wait for a job to finish or upgrade your plan.`,
-          429,
         );
       }
     },

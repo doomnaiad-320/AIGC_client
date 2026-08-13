@@ -64,7 +64,7 @@ async function main() {
     return adminClient;
   };
 
-  const jobService = createJobService({ createUserClient, getAdminClient, pgmq });
+  const jobService = createJobService({ createUserClient, getAdminClient });
   const billingCatalogService = createBillingCatalogService({ getAdminClient });
   const creditService = createCreditService({
     billingCatalogService,

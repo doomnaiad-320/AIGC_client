@@ -107,7 +107,13 @@ export function createLoomicDeepAgent(options: {
     model: resolvedModel,
     name: "loomic",
     ...(options.store ? { store: options.store } : {}),
-    subagents: [createVideoSubAgent()],
+    subagents: [
+      createVideoSubAgent(
+        options.submitVideoJob
+          ? { submitVideoJob: options.submitVideoJob }
+          : undefined,
+      ),
+    ],
     systemPrompt,
     tools: createMainAgentTools(backendResult.factory, {
       createUserClient,

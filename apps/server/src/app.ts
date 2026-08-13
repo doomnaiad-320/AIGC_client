@@ -113,7 +113,6 @@ import { registerSkillRoutes } from "./http/skills.js";
 import { registerUploadRoutes } from "./http/uploads.js";
 import { registerVideoModelRoutes } from "./http/video-models.js";
 import { registerViewerRoutes } from "./http/viewer.js";
-import { createPgmqClient } from "./queue/pgmq-client.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { CanvasEventBuffer } from "./ws/event-buffer.js";
 import { registerWsRoute } from "./ws/handler.js";
@@ -205,11 +204,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const uploadService =
     options.uploadService ?? createUploadService({ createUserClient });
   const databaseUrl = getDatabaseUrl(env);
-  const pgmq = databaseUrl ? createPgmqClient(databaseUrl) : undefined;
   const jobService =
     options.jobService ??
-    (pgmq
-      ? createJobService({ createUserClient, getAdminClient, pgmq })
+    (databaseUrl
+      ? createJobService({ createUserClient, getAdminClient })
       : undefined);
   const billingCatalogService =
     options.billingCatalogService ??
@@ -226,7 +224,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   const tierGuard =
     options.tierGuard ??
-    createTierGuard({ billingCatalogService, getAdminClient });
+    createTierGuard({ billingCatalogService });
 
   // Optional legacy payment adapter. Core billing remains provider-neutral.
   let paymentService: PaymentService | undefined = options.paymentService;
@@ -347,7 +345,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   void registerGenerateRoutes(app, {
     auth,
     creditService,
-    uploadService,
     viewerService,
     ...(jobService ? { jobService } : {}),
     ...(tierGuard ? { tierGuard } : {}),

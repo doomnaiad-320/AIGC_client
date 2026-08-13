@@ -31,6 +31,7 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
     prompt: string;
     model?: string;
     aspect_ratio?: string;
+    quality?: "standard" | "hd" | "ultra";
     title?: string;
     input_images?: string[];
   };
@@ -68,6 +69,7 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
         prompt: payload.prompt,
         model,
         ...(payload.aspect_ratio !== undefined ? { aspectRatio: payload.aspect_ratio } : {}),
+        ...(payload.quality !== undefined ? { quality: payload.quality } : {}),
         ...(payload.input_images?.length ? { inputImages: payload.input_images } : {}),
       });
     } catch (genError) {
