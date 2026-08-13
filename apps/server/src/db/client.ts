@@ -603,6 +603,35 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
           args.p_idempotency_key,
         ],
       };
+    case "admin_save_billing_plan_draft":
+      return {
+        sql: "select public.admin_save_billing_plan_draft($1::uuid, $2::text, $3::text, $4::int, $5::int, $6::int, $7::int, $8::boolean, $9::jsonb, $10::text) as result",
+        unwrapColumn: "result",
+        values: [
+          args.p_actor_user_id,
+          args.p_plan_code,
+          args.p_currency,
+          args.p_monthly_price_minor,
+          args.p_annual_price_minor,
+          args.p_monthly_subscription_credits,
+          args.p_daily_credits,
+          args.p_top_up_eligible,
+          JSON.stringify(args.p_entitlements ?? {}),
+          args.p_reason,
+        ],
+      };
+    case "admin_create_billing_plan_draft":
+      return {
+        sql: "select public.admin_create_billing_plan_draft($1::uuid, $2::text, $3::text) as result",
+        unwrapColumn: "result",
+        values: [args.p_actor_user_id, args.p_plan_code, args.p_reason],
+      };
+    case "admin_publish_billing_plan":
+      return {
+        sql: "select public.admin_publish_billing_plan($1::uuid, $2::text, $3::text) as result",
+        unwrapColumn: "result",
+        values: [args.p_actor_user_id, args.p_plan_code, args.p_reason],
+      };
     default:
       throw new Error(`Unsupported database function: ${functionName}`);
   }
