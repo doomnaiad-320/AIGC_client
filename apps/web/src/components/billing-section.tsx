@@ -1,191 +1,400 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import Link from "next/link";
 import {
+  CalendarClock,
+  CircleCheck,
+  Coins,
   CreditCard,
   Crown,
   ExternalLink,
   Loader2,
-  AlertTriangle,
+  RefreshCw,
+  RotateCcw,
+  TriangleAlert,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
+import { useCallback, useState } from "react";
 
 import { useSubscription } from "@/hooks/use-subscription";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const planLabels = {
+  enterprise: "企业版",
+  free: "免费版",
+  pro: "专业版",
+  team: "团队版",
+} as const;
 
 export function BillingSection() {
-  const { subscription, loading, error, cancel } = useSubscription();
+  const { subscription, loading, error, refresh, cancel, resume } =
+    useSubscription();
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [operation, setOperation] = useState<"cancel" | "resume" | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
 
   const handleCancel = useCallback(async () => {
-    setCancelling(true);
-    setCancelError(null);
+    setOperation("cancel");
+    setOperationError(null);
     try {
       await cancel();
       setCancelConfirmOpen(false);
     } catch (err) {
-      setCancelError(
-        err instanceof Error ? err.message : "Failed to cancel subscription",
+      setOperationError(
+        err instanceof Error ? err.message : "无法取消订阅，请稍后重试。",
       );
     } finally {
-      setCancelling(false);
+      setOperation(null);
     }
   }, [cancel]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading billing info...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-        Failed to load subscription info. Please try again later.
-      </div>
-    );
-  }
-
-  const plan = subscription?.plan ?? "free";
-  const isFree = plan === "free";
-  const isCancelled = !!subscription?.canceledAt;
+  const handleResume = useCallback(async () => {
+    setOperation("resume");
+    setOperationError(null);
+    try {
+      await resume();
+    } catch (err) {
+      setOperationError(
+        err instanceof Error ? err.message : "无法恢复订阅，请稍后重试。",
+      );
+    } finally {
+      setOperation(null);
+    }
+  }, [resume]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-base font-semibold">Billing</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your subscription and billing details.
-        </p>
-      </div>
-
-      {/* Current plan card */}
-      <div className="rounded-lg border p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Crown className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Current Plan</span>
-        </div>
-        <p className="text-2xl font-bold capitalize">{plan}</p>
-
-        {subscription?.billingPeriod && (
-          <p className="mt-1 text-sm text-muted-foreground capitalize">
-            {subscription.billingPeriod} billing
-          </p>
-        )}
-
-        {subscription?.currentPeriodEnd && !isFree && (
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold">订阅与计费</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isCancelled ? "Access until" : "Next billing date"}:{" "}
-            <span className="font-medium text-foreground">
-              {new Date(subscription.currentPeriodEnd).toLocaleDateString(
-                undefined,
-                { year: "numeric", month: "long", day: "numeric" },
-              )}
-            </span>
+            查看当前套餐、点数周期并管理订阅状态。
           </p>
-        )}
+        </div>
+        <Button
+          aria-label="刷新订阅状态"
+          disabled={loading}
+          onClick={() => void refresh()}
+          size="icon"
+          title="刷新订阅状态"
+          variant="outline"
+        >
+          {loading ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <RefreshCw />
+          )}
+        </Button>
+      </div>
 
-        {isCancelled && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            Subscription cancelled. Access continues until the end of the
-            billing period.
+      {loading && !subscription ? (
+        <div className="rounded-lg border p-5">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            正在读取订阅状态...
           </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Link href="/pricing">
-          <Button variant="default" size="lg">
-            <CreditCard className="mr-1.5 h-4 w-4" />
-            {isFree ? "Upgrade Plan" : "Change Plan"}
-          </Button>
-        </Link>
-
-        {subscription?.customerPortalUrl && (
-          <a
-            href={subscription.customerPortalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button variant="outline" size="lg">
-              <ExternalLink className="mr-1.5 h-4 w-4" />
-              Manage Billing
-            </Button>
-          </a>
-        )}
-
-        {!isFree && !isCancelled && (
-          <Button
-            variant="destructive"
-            size="lg"
-            onClick={() => setCancelConfirmOpen(true)}
-          >
-            Cancel Subscription
-          </Button>
-        )}
-      </div>
-
-      {/* Cancel confirmation dialog */}
-      <AnimatePresence>
-        {cancelConfirmOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 z-50 bg-black/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => !cancelling && setCancelConfirmOpen(false)}
-            />
-            <motion.div
-              className="fixed left-1/2 top-1/2 z-50 w-[400px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-card p-6 shadow-lg"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <h3 className="text-lg font-semibold">Cancel Subscription?</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Your subscription will remain active until the end of the
-                current billing period. After that, you will be downgraded to
-                the Free plan.
+        </div>
+      ) : error || !subscription ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div>
+              <p className="text-sm font-medium text-destructive">
+                无法加载订阅状态
               </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {error ?? "请稍后重试。"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <SubscriptionPanel
+          subscription={subscription}
+          operation={operation}
+          operationError={operationError}
+          onCancel={() => {
+            setOperationError(null);
+            setCancelConfirmOpen(true);
+          }}
+          onResume={handleResume}
+        />
+      )}
 
-              {cancelError && (
-                <p className="mt-3 text-sm text-destructive">
-                  {cancelError}
-                </p>
-              )}
-
-              <div className="mt-5 flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setCancelConfirmOpen(false)}
-                  disabled={cancelling}
-                >
-                  Keep Subscription
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleCancel}
-                  disabled={cancelling}
-                >
-                  {cancelling ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Confirm Cancel
-                </Button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <Dialog
+        open={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          if (!operation) setCancelConfirmOpen(open);
+        }}
+      >
+        <DialogContent showCloseButton={!operation}>
+          <DialogHeader>
+            <DialogTitle>取消当前订阅？</DialogTitle>
+            <DialogDescription>
+              套餐权益会保留到当前订阅周期结束。到期后工作区将自动回到免费版，未使用的订阅点数也会失效。
+            </DialogDescription>
+          </DialogHeader>
+          {operationError ? (
+            <p className="text-sm text-destructive">{operationError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              disabled={operation === "cancel"}
+              onClick={() => setCancelConfirmOpen(false)}
+              variant="outline"
+            >
+              保留订阅
+            </Button>
+            <Button
+              disabled={operation === "cancel"}
+              onClick={handleCancel}
+              variant="destructive"
+            >
+              {operation === "cancel" ? (
+                <Loader2 className="animate-spin" />
+              ) : null}
+              确认取消
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function SubscriptionPanel({
+  subscription,
+  operation,
+  operationError,
+  onCancel,
+  onResume,
+}: {
+  subscription: NonNullable<ReturnType<typeof useSubscription>["subscription"]>;
+  operation: "cancel" | "resume" | null;
+  operationError: string | null;
+  onCancel: () => void;
+  onResume: () => Promise<void>;
+}) {
+  const isFree = subscription.plan === "free";
+  const willCancel =
+    subscription.cancelAtPeriodEnd || Boolean(subscription.canceledAt);
+  const planName = subscription.planName || planLabels[subscription.plan];
+
+  return (
+    <>
+      <section className="overflow-hidden rounded-lg border bg-card">
+        <div className="flex flex-col gap-4 border-b px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+              <Crown className="size-4" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">
+                当前套餐
+              </p>
+              <h3 className="mt-1 text-xl font-semibold">{planName}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {subscription.billingPeriod
+                  ? `${billingPeriodLabel(subscription.billingPeriod)}订阅`
+                  : "无固定计费周期"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge
+              label={willCancel ? "等待到期" : statusLabel(subscription.status)}
+              warning={willCancel}
+            />
+            <span className="inline-flex h-6 items-center rounded-md border px-2 text-xs font-medium text-muted-foreground">
+              {providerLabel(subscription.provider)}
+            </span>
+          </div>
+        </div>
+
+        {willCancel ? (
+          <div className="flex items-start gap-3 border-b bg-amber-500/5 px-5 py-4">
+            <CalendarClock className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+            <p className="text-sm text-muted-foreground">
+              订阅将在 {formatDate(subscription.currentPeriodEnd)}
+              结束。在此之前套餐权益保持有效，你可以随时恢复自动续订。
+            </p>
+          </div>
+        ) : subscription.provider === "local" ? (
+          <div className="flex items-start gap-3 border-b bg-muted/35 px-5 py-4">
+            <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+            <p className="text-sm text-muted-foreground">
+              当前为本地订阅模拟，套餐、点数和周期状态均写入 PostgreSQL，不会产生真实扣款。
+            </p>
+          </div>
+        ) : null}
+
+        <dl className="grid sm:grid-cols-2">
+          <InfoRow
+            icon={<CreditCard />}
+            label="计费周期"
+            value={
+              subscription.billingPeriod
+                ? billingPeriodLabel(subscription.billingPeriod)
+                : "不适用"
+            }
+          />
+          <InfoRow
+            icon={<Coins />}
+            label="每月订阅点数"
+            value={`${subscription.monthlyCredits.toLocaleString("en-US")} 点`}
+          />
+          <InfoRow
+            label="订阅周期"
+            value={formatDateRange(
+              subscription.currentPeriodStart,
+              subscription.currentPeriodEnd,
+            )}
+          />
+          <InfoRow
+            label="点数周期"
+            value={formatDateRange(
+              subscription.creditPeriodStart,
+              subscription.creditPeriodEnd,
+            )}
+          />
+          <InfoRow
+            label={willCancel ? "权益保留至" : "下次续订"}
+            value={formatDate(subscription.currentPeriodEnd)}
+          />
+          <InfoRow label="结算货币" value={subscription.currency} />
+        </dl>
+      </section>
+
+      {operationError ? (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          {operationError}
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button render={<Link href="/pricing" />} size="lg">
+          <CreditCard />
+          {isFree ? "选择套餐" : "更换套餐"}
+        </Button>
+
+        {subscription.customerPortalUrl ? (
+          <Button
+            render={
+              <a
+                href={subscription.customerPortalUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+              />
+            }
+            size="lg"
+            variant="outline"
+          >
+            <ExternalLink />
+            管理付款方式
+          </Button>
+        ) : null}
+
+        {!isFree && willCancel ? (
+          <Button
+            disabled={operation === "resume"}
+            onClick={() => void onResume()}
+            size="lg"
+            variant="outline"
+          >
+            {operation === "resume" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <RotateCcw />
+            )}
+            恢复订阅
+          </Button>
+        ) : null}
+
+        {!isFree && !willCancel ? (
+          <Button onClick={onCancel} size="lg" variant="destructive">
+            取消订阅
+          </Button>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="border-b px-5 py-4 last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(odd)]:border-r">
+      <dt className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+        {icon}
+        {label}
+      </dt>
+      <dd className="mt-1.5 text-sm font-medium tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function StatusBadge({ label, warning }: { label: string; warning: boolean }) {
+  return (
+    <span
+      className={
+        warning
+          ? "inline-flex h-6 items-center rounded-md bg-amber-500/10 px-2 text-xs font-medium text-amber-700 dark:text-amber-400"
+          : "inline-flex h-6 items-center rounded-md bg-emerald-500/10 px-2 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
+function statusLabel(status: string | null) {
+  return (
+    {
+      active: "生效中",
+      canceled: "已取消",
+      expired: "已到期",
+      past_due: "付款逾期",
+      paused: "已暂停",
+      trialing: "试用中",
+    }[status ?? ""] ?? "生效中"
+  );
+}
+
+function providerLabel(provider: string | null) {
+  if (provider === "local") return "本地模拟";
+  if (provider === "lemon_squeezy") return "Lemon Squeezy";
+  return "平台套餐";
+}
+
+function billingPeriodLabel(period: "monthly" | "yearly") {
+  return period === "yearly" ? "年付" : "月付";
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "不适用";
+  return new Intl.DateTimeFormat("zh-CN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateRange(start: string | null, end: string | null) {
+  if (!start && !end) return "不适用";
+  return `${formatDate(start)} - ${formatDate(end)}`;
 }

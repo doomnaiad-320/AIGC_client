@@ -53,9 +53,19 @@ export function CreditInsufficientDialog({
     setUpgrading(true);
     try {
       // Default to Pro monthly as the recommended upgrade path
-      const { checkoutUrl } = await createCheckout(token, "pro", "monthly");
+      const result = await createCheckout(token, "pro", "monthly");
       onClose();
-      openLemonCheckout(checkoutUrl);
+      if (result.activated) {
+        window.location.assign(
+          result.checkoutUrl ??
+            "/settings?tab=billing&subscription=activated",
+        );
+        return;
+      }
+      if (!result.checkoutUrl) {
+        throw new Error("Checkout URL is unavailable.");
+      }
+      openLemonCheckout(result.checkoutUrl);
     } catch {
       // Fallback to pricing page on error
       window.location.href = "/pricing";

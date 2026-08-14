@@ -1,5 +1,5 @@
 // @credits-system — Frontend API client for payments: checkout, subscription, cancellation, plan change
-import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
+import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
 
 import { getServerBaseUrl } from "./env";
 import { ApiApplicationError, ApiAuthError } from "./server-api";
@@ -7,13 +7,26 @@ import { ApiApplicationError, ApiAuthError } from "./server-api";
 // ── Types ────────────────────────────────────────────────────
 
 export type SubscriptionStatus = {
-  plan: SubscriptionPlan;
+  plan: BillingPlanCode;
+  planName: string | null;
   billingPeriod: BillingPeriod | null;
   status: string | null;
+  provider: string | null;
   lemonSqueezySubscriptionId: string | null;
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
+  creditPeriodStart: string | null;
+  creditPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
   canceledAt: string | null;
   customerPortalUrl: string | null;
+  monthlyCredits: number;
+  currency: "USD";
+};
+
+export type CheckoutResult = {
+  activated: boolean;
+  checkoutUrl: string | null;
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -50,16 +63,16 @@ async function handleErrorResponse(response: Response): Promise<never> {
 
 export async function createCheckout(
   accessToken: string,
-  plan: string,
-  billingPeriod: string,
-): Promise<{ checkoutUrl: string }> {
+  plan: BillingPlanCode,
+  billingPeriod: BillingPeriod,
+): Promise<CheckoutResult> {
   const response = await fetch(`${getServerBaseUrl()}/api/payments/checkout`, {
     method: "POST",
     headers: authJsonHeaders(accessToken),
     body: JSON.stringify({ plan, billingPeriod }),
   });
   if (!response.ok) return handleErrorResponse(response);
-  return (await response.json()) as { checkoutUrl: string };
+  return (await response.json()) as CheckoutResult;
 }
 
 export async function getSubscription(
@@ -81,10 +94,18 @@ export async function cancelSubscription(accessToken: string): Promise<void> {
   if (!response.ok) return handleErrorResponse(response);
 }
 
+export async function resumeSubscription(accessToken: string): Promise<void> {
+  const response = await fetch(`${getServerBaseUrl()}/api/payments/resume`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) return handleErrorResponse(response);
+}
+
 export async function changePlan(
   accessToken: string,
-  plan: string,
-  billingPeriod: string,
+  plan: BillingPlanCode,
+  billingPeriod: BillingPeriod,
 ): Promise<void> {
   const response = await fetch(
     `${getServerBaseUrl()}/api/payments/change-plan`,

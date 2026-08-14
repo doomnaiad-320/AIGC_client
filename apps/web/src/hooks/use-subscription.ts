@@ -1,12 +1,14 @@
 // @credits-system — React hook for subscription status, cancellation, and plan changes
 "use client";
 
+import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   getSubscription,
   cancelSubscription as apiCancelSubscription,
   changePlan as apiChangePlan,
+  resumeSubscription as apiResumeSubscription,
   type SubscriptionStatus,
 } from "@/lib/payments-api";
 
@@ -16,7 +18,11 @@ interface UseSubscriptionReturn {
   error: string | null;
   refresh: () => Promise<void>;
   cancel: () => Promise<void>;
-  changePlan: (plan: string, billingPeriod: string) => Promise<void>;
+  resume: () => Promise<void>;
+  changePlan: (
+    plan: BillingPlanCode,
+    billingPeriod: BillingPeriod,
+  ) => Promise<void>;
 }
 
 export function useSubscription(): UseSubscriptionReturn {
@@ -61,8 +67,15 @@ export function useSubscription(): UseSubscriptionReturn {
     await refresh();
   }, [refresh]);
 
+  const resume = useCallback(async () => {
+    const token = accessTokenRef.current;
+    if (!token) throw new Error("Not authenticated");
+    await apiResumeSubscription(token);
+    await refresh();
+  }, [refresh]);
+
   const changePlan = useCallback(
-    async (plan: string, billingPeriod: string) => {
+    async (plan: BillingPlanCode, billingPeriod: BillingPeriod) => {
       const token = accessTokenRef.current;
       if (!token) throw new Error("Not authenticated");
       await apiChangePlan(token, plan, billingPeriod);
@@ -71,5 +84,13 @@ export function useSubscription(): UseSubscriptionReturn {
     [refresh],
   );
 
-  return { subscription, loading, error, refresh, cancel, changePlan };
+  return {
+    subscription,
+    loading,
+    error,
+    refresh,
+    cancel,
+    resume,
+    changePlan,
+  };
 }

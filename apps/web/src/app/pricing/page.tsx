@@ -1,6 +1,6 @@
 "use client";
 
-import type { PublishedBillingPlan } from "@loomic/shared";
+import type { BillingPlanCode, PublishedBillingPlan } from "@loomic/shared";
 import { BadgeAlert, Settings } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -58,18 +58,32 @@ export default function PricingPage() {
 
       setCheckoutError(null);
       try {
-        const legacyAdapterPlan = plan === "team" ? "ultra" : plan;
-        if (subscription?.lemonSqueezySubscriptionId) {
-          await changePlan(token, legacyAdapterPlan, period);
+        const selectedPlan = plan as BillingPlanCode;
+        if (subscription?.plan && subscription.plan !== "free") {
+          await changePlan(token, selectedPlan, period);
           await refreshSubscription();
+          window.location.assign(
+            "/settings?tab=billing&subscription=changed",
+          );
           return;
         }
-        const { checkoutUrl } = await createCheckout(
+        const result = await createCheckout(
           token,
-          legacyAdapterPlan,
+          selectedPlan,
           period,
         );
-        window.location.assign(checkoutUrl);
+        if (result.activated) {
+          await refreshSubscription();
+          window.location.assign(
+            result.checkoutUrl ??
+              "/settings?tab=billing&subscription=activated",
+          );
+          return;
+        }
+        if (!result.checkoutUrl) {
+          throw new Error("结算地址不可用，请稍后重试。");
+        }
+        window.location.assign(result.checkoutUrl);
       } catch (error) {
         setCheckoutError(
           error instanceof Error
@@ -81,7 +95,7 @@ export default function PricingPage() {
     [
       refreshSubscription,
       session?.access_token,
-      subscription?.lemonSqueezySubscriptionId,
+      subscription?.plan,
     ],
   );
 
