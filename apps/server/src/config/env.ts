@@ -31,6 +31,7 @@ export type ServerEnv = {
   agentFilesRoot?: string;
   agentModel: string;
   appJwtSecret?: string;
+  billingLocalSubscriptionsEnabled: boolean;
   databaseUrl?: string;
   googleApiKey?: string;
   googleApplicationCredentials?: string;
@@ -86,6 +87,13 @@ export function loadServerEnv(
     normalizeOptionalString(source.POSTGRES_URL);
   const appJwtSecret =
     overrides.appJwtSecret ?? normalizeOptionalString(source.APP_JWT_SECRET);
+  const billingLocalSubscriptionsEnabled =
+    overrides.billingLocalSubscriptionsEnabled ??
+    parseOptionalBoolean(
+      source.BILLING_LOCAL_SUBSCRIPTIONS_ENABLED,
+      "BILLING_LOCAL_SUBSCRIPTIONS_ENABLED",
+    ) ??
+    source.NODE_ENV !== "production";
   const serverPublicUrl =
     overrides.serverPublicUrl ??
     normalizeOptionalString(source.LOOMIC_SERVER_PUBLIC_URL) ??
@@ -173,6 +181,7 @@ export function loadServerEnv(
       overrides.agentBackendMode ??
       parseAgentBackendMode(source.LOOMIC_AGENT_BACKEND_MODE),
     agentModel: resolvedAgentModel,
+    billingLocalSubscriptionsEnabled,
     port: overrides.port ?? parsePort(source.LOOMIC_SERVER_PORT ?? source.PORT),
     version: overrides.version ?? readServerVersion(),
     webOrigin:
@@ -264,6 +273,13 @@ function parseOptionalPositiveInt(rawValue: string | undefined, name: string) {
   }
 
   return value;
+}
+
+function parseOptionalBoolean(rawValue: string | undefined, name: string) {
+  if (!rawValue) return undefined;
+  if (rawValue === "true" || rawValue === "1") return true;
+  if (rawValue === "false" || rawValue === "0") return false;
+  throw new Error(`Invalid ${name} value: ${rawValue}`);
 }
 
 function readServerVersion() {

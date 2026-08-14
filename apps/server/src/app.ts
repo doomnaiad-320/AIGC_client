@@ -68,6 +68,7 @@ import {
   createJobService,
 } from "./features/jobs/job-service.js";
 import { createLemonSqueezyClient } from "./features/payments/lemon-squeezy-client.js";
+import { createLocalSubscriptionService } from "./features/payments/local-subscription-service.js";
 import {
   type PaymentService,
   buildVariantMap,
@@ -226,8 +227,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     options.tierGuard ??
     createTierGuard({ billingCatalogService });
 
-  // Optional legacy payment adapter. Core billing remains provider-neutral.
+  // Optional payment adapter. Local mode exercises the real PostgreSQL
+  // lifecycle without requiring a payment provider during development.
   let paymentService: PaymentService | undefined = options.paymentService;
+  let paymentAdapter: "injected" | "lemon_squeezy" | "local" | undefined =
+    paymentService ? "injected" : undefined;
   if (!paymentService && env.lemonSqueezyApiKey && env.lemonSqueezyStoreId) {
     const lsClient = createLemonSqueezyClient({
       apiKey: env.lemonSqueezyApiKey,
@@ -239,6 +243,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       variantMap: buildVariantMap(env),
       webOrigin: env.webOrigin,
     });
+    paymentAdapter = "lemon_squeezy";
+  } else if (!paymentService && env.billingLocalSubscriptionsEnabled) {
+    paymentService = createLocalSubscriptionService({
+      getAdminClient,
+      webOrigin: env.webOrigin,
+    });
+    paymentAdapter = "local";
   }
 
   const connectionManager =
@@ -376,7 +387,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   if (paymentService) {
     void registerPaymentRoutes(app, { auth, paymentService, viewerService });
 
-    if (env.lemonSqueezyWebhookSecret) {
+    if (
+      paymentAdapter !== "local" &&
+      env.lemonSqueezyWebhookSecret
+    ) {
       const configuredPaymentService = paymentService;
       const webhookSecret = env.lemonSqueezyWebhookSecret;
       // Webhook route is registered in an encapsulated plugin so the custom

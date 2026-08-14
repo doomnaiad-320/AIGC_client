@@ -1,5 +1,9 @@
 // @credits-system — Payment lifecycle: checkout creation, subscription sync, cancellation, plan changes
-import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
+import type {
+  BillingPeriod,
+  BillingPlanCode,
+  SubscriptionPlan,
+} from "@loomic/shared";
 
 import type { AdminDbClient } from "../../db/client.js";
 import type { LemonSqueezyClient } from "./lemon-squeezy-client.js";
@@ -31,13 +35,21 @@ export class PaymentServiceError extends Error {
 // ── Types ────────────────────────────────────────────────────
 
 export type SubscriptionStatus = {
-  plan: SubscriptionPlan;
+  plan: BillingPlanCode;
+  planName: string | null;
   billingPeriod: BillingPeriod | null;
   status: string | null;
+  provider: string | null;
   lemonSqueezySubscriptionId: string | null;
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
+  creditPeriodStart: string | null;
+  creditPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
   canceledAt: string | null;
   customerPortalUrl: string | null;
+  monthlyCredits: number;
+  currency: "USD";
 };
 
 export type VariantMap = Record<string, string>;
@@ -45,22 +57,29 @@ export type VariantMap = Record<string, string>;
 export type PaymentService = {
   createCheckout(
     workspaceId: string,
-    planId: SubscriptionPlan,
+    actorUserId: string,
+    planId: BillingPlanCode,
     billingPeriod: BillingPeriod,
-  ): Promise<{ checkoutUrl: string }>;
+  ): Promise<{ activated: boolean; checkoutUrl: string | null }>;
 
   handleWebhookEvent(
     eventName: string,
     payload: WebhookPayload,
   ): Promise<void>;
 
-  getSubscriptionStatus(workspaceId: string): Promise<SubscriptionStatus>;
+  getSubscriptionStatus(
+    workspaceId: string,
+    actorUserId: string,
+  ): Promise<SubscriptionStatus>;
 
-  cancelSubscription(workspaceId: string): Promise<void>;
+  cancelSubscription(workspaceId: string, actorUserId: string): Promise<void>;
+
+  resumeSubscription(workspaceId: string, actorUserId: string): Promise<void>;
 
   changePlan(
     workspaceId: string,
-    newPlanId: SubscriptionPlan,
+    actorUserId: string,
+    newPlanId: BillingPlanCode,
     billingPeriod: BillingPeriod,
   ): Promise<void>;
 };
@@ -102,15 +121,21 @@ export function createPaymentService(options: {
   const { lemonSqueezy, getAdminClient, variantMap, webOrigin } = options;
 
   // Build reverse lookup: variantId -> "plan_period"
-  const reverseVariantMap = new Map<string, { plan: SubscriptionPlan; period: BillingPeriod }>();
+  const reverseVariantMap = new Map<
+    string,
+    { plan: BillingPlanCode; period: BillingPeriod }
+  >();
   for (const [key, variantId] of Object.entries(variantMap)) {
     if (!variantId) continue;
-    const [plan, period] = key.split("_") as [SubscriptionPlan, BillingPeriod];
-    reverseVariantMap.set(variantId, { plan, period });
+    const [plan, period] = key.split("_") as [string, BillingPeriod];
+    reverseVariantMap.set(variantId, {
+      plan: catalogPlanFromLegacy(plan),
+      period,
+    });
   }
 
-  function lookupVariant(planId: SubscriptionPlan, billingPeriod: BillingPeriod): string {
-    const key = `${planId}_${billingPeriod}`;
+  function lookupVariant(planId: BillingPlanCode, billingPeriod: BillingPeriod): string {
+    const key = `${legacyVariantPlan(planId)}_${billingPeriod}`;
     const variantId = variantMap[key];
     if (!variantId) {
       throw new PaymentServiceError(
@@ -122,12 +147,15 @@ export function createPaymentService(options: {
     return variantId;
   }
 
-  function resolvePlanFromVariant(variantId: number): { plan: SubscriptionPlan; period: BillingPeriod } | null {
+  function resolvePlanFromVariant(variantId: number): {
+    plan: BillingPlanCode;
+    period: BillingPeriod;
+  } | null {
     return reverseVariantMap.get(String(variantId)) ?? null;
   }
 
   return {
-    async createCheckout(workspaceId, planId, billingPeriod) {
+    async createCheckout(workspaceId, _actorUserId, planId, billingPeriod) {
       const variantId = lookupVariant(planId, billingPeriod);
       const redirectUrl = `${webOrigin}/settings?checkout=success`;
 
@@ -137,7 +165,7 @@ export function createPaymentService(options: {
         redirectUrl,
       );
 
-      return { checkoutUrl: result.checkoutUrl };
+      return { activated: false, checkoutUrl: result.checkoutUrl };
     },
 
     async handleWebhookEvent(eventName, payload) {
@@ -153,7 +181,7 @@ export function createPaymentService(options: {
           }
 
           const resolved = resolvePlanFromVariant(attrs.variant_id);
-          const plan: SubscriptionPlan = resolved?.plan ?? "starter";
+          const plan: BillingPlanCode = resolved?.plan ?? "pro";
           const billingPeriod: BillingPeriod = resolved?.period ?? "monthly";
 
           // NOTE: lemon_squeezy_* columns added via migration but not yet in
@@ -162,7 +190,7 @@ export function createPaymentService(options: {
           await (admin as any)
             .from("subscriptions")
             .update({
-              plan,
+              plan: legacySubscriptionPlan(plan),
               billing_period: billingPeriod,
               lemon_squeezy_subscription_id: subscriptionId,
               lemon_squeezy_customer_id: String(attrs.customer_id),
@@ -196,7 +224,7 @@ export function createPaymentService(options: {
           };
 
           if (resolved) {
-            updateData.plan = resolved.plan;
+            updateData.plan = legacySubscriptionPlan(resolved.plan);
             updateData.billing_period = resolved.period;
           }
 
@@ -265,7 +293,7 @@ export function createPaymentService(options: {
               .eq("workspace_id", wsId);
 
             // Grant monthly credits for renewal
-            const plan = sub.plan as SubscriptionPlan;
+            const plan = catalogPlanFromLegacy(sub.plan as SubscriptionPlan);
             await grantMonthlyCredits(getAdminClient(), wsId, plan);
           }
           break;
@@ -311,7 +339,7 @@ export function createPaymentService(options: {
       }
     },
 
-    async getSubscriptionStatus(workspaceId) {
+    async getSubscriptionStatus(workspaceId, _actorUserId) {
       const admin = getAdminClient();
 
       // NOTE: lemon_squeezy_* columns exist via migration but are not yet in
@@ -319,7 +347,7 @@ export function createPaymentService(options: {
       const { data, error } = await (admin as any)
         .from("subscriptions")
         .select(
-          "plan, billing_period, lemon_squeezy_subscription_id, current_period_end, canceled_at",
+          "plan, billing_period, lemon_squeezy_subscription_id, current_period_start, current_period_end, canceled_at",
         )
         .eq("workspace_id", workspaceId)
         .maybeSingle();
@@ -345,17 +373,25 @@ export function createPaymentService(options: {
       }
 
       return {
-        plan: ((data as any)?.plan as SubscriptionPlan) ?? "free",
+        plan: catalogPlanFromLegacy((data as any)?.plan ?? "free"),
+        planName: null,
         billingPeriod: ((data as any)?.billing_period as BillingPeriod) ?? null,
         status: lsSubId ? "active" : null,
+        provider: lsSubId ? "lemon_squeezy" : null,
         lemonSqueezySubscriptionId: lsSubId ?? null,
+        currentPeriodStart: (data as any)?.current_period_start ?? null,
         currentPeriodEnd: (data as any)?.current_period_end ?? null,
+        creditPeriodStart: null,
+        creditPeriodEnd: (data as any)?.current_period_end ?? null,
+        cancelAtPeriodEnd: Boolean((data as any)?.canceled_at),
         canceledAt: (data as any)?.canceled_at ?? null,
         customerPortalUrl,
+        monthlyCredits: 0,
+        currency: "USD",
       };
     },
 
-    async cancelSubscription(workspaceId) {
+    async cancelSubscription(workspaceId, _actorUserId) {
       const admin = getAdminClient();
 
       const { data } = await (admin as any)
@@ -380,7 +416,27 @@ export function createPaymentService(options: {
       // (the webhook handler also handles this, so it's idempotent)
     },
 
-    async changePlan(workspaceId, newPlanId, billingPeriod) {
+    async resumeSubscription(workspaceId, _actorUserId) {
+      const admin = getAdminClient();
+      const { data } = await (admin as any)
+        .from("subscriptions")
+        .select("lemon_squeezy_subscription_id")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+      const lsSubId = (data as any)?.lemon_squeezy_subscription_id as
+        | string
+        | null;
+      if (!lsSubId) {
+        throw new PaymentServiceError(
+          "subscription_not_found",
+          "No active Lemon Squeezy subscription found for this workspace.",
+          404,
+        );
+      }
+      await lemonSqueezy.updateSubscription(lsSubId, { cancelled: false });
+    },
+
+    async changePlan(workspaceId, _actorUserId, newPlanId, billingPeriod) {
       const admin = getAdminClient();
 
       const { data } = await (admin as any)
@@ -428,14 +484,9 @@ async function findWorkspaceByLsSubscription(
 async function grantMonthlyCredits(
   admin: AdminDbClient,
   workspaceId: string,
-  plan: SubscriptionPlan,
+  plan: BillingPlanCode | SubscriptionPlan,
 ): Promise<void> {
-  const planCode =
-    plan === "free"
-      ? "free"
-      : plan === "ultra" || plan === "business"
-        ? "team"
-        : "pro";
+  const planCode = catalogPlanFromLegacy(plan);
   const { data: planRows, error: planError } = await admin.query<{
     monthlyCredits: number;
   }>(
@@ -498,6 +549,28 @@ async function grantMonthlyCredits(
       description: `${plan} plan — initial monthly credits granted`,
     });
   }
+}
+
+function legacyVariantPlan(plan: BillingPlanCode) {
+  if (plan === "team") return "ultra";
+  if (plan === "enterprise") return "business";
+  return plan;
+}
+
+function legacySubscriptionPlan(plan: BillingPlanCode): SubscriptionPlan {
+  if (plan === "team") return "ultra";
+  if (plan === "enterprise") return "business";
+  return plan;
+}
+
+function catalogPlanFromLegacy(plan: string): BillingPlanCode {
+  if (plan === "ultra") return "team";
+  if (plan === "business") return "enterprise";
+  if (plan === "starter") return "pro";
+  if (plan === "free" || plan === "pro" || plan === "team" || plan === "enterprise") {
+    return plan;
+  }
+  return "free";
 }
 
 // ── Variant map builder ──────────────────────────────────────

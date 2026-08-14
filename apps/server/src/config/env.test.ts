@@ -40,4 +40,27 @@ describe("loadServerEnv PostgreSQL configuration", () => {
     expect(env.serverPublicUrl).toBe("http://localhost:3001");
     expect(env.storageRoot).toBe(".loomic-storage");
   });
+
+  it("enables local subscriptions outside production and disables them in production", () => {
+    expect(
+      loadServerEnv({}, { NODE_ENV: "development" } as NodeJS.ProcessEnv)
+        .billingLocalSubscriptionsEnabled,
+    ).toBe(true);
+    expect(
+      loadServerEnv({}, { NODE_ENV: "production" } as NodeJS.ProcessEnv)
+        .billingLocalSubscriptionsEnabled,
+    ).toBe(false);
+  });
+
+  it("accepts an explicit local subscription override", () => {
+    expect(
+      loadServerEnv(
+        {},
+        {
+          BILLING_LOCAL_SUBSCRIPTIONS_ENABLED: "true",
+          NODE_ENV: "production",
+        } as NodeJS.ProcessEnv,
+      ).billingLocalSubscriptionsEnabled,
+    ).toBe(true);
+  });
 });

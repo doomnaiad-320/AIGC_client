@@ -1,8 +1,8 @@
-import type { BillingPeriod, SubscriptionPlan } from "@loomic/shared";
+import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
 import {
   applicationErrorResponseSchema,
+  billingPlanCodeSchema,
   billingPeriodSchema,
-  subscriptionPlanSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
 // @credits-system — Payment API routes: checkout, subscription status, plan change, cancellation
@@ -30,7 +30,7 @@ export async function registerPaymentRoutes(
       if (!user) return sendUnauthenticated(reply);
 
       const body = request.body as { plan?: string; billingPeriod?: string };
-      const planParsed = subscriptionPlanSchema.safeParse(body.plan);
+      const planParsed = billingPlanCodeSchema.safeParse(body.plan);
       const periodParsed = billingPeriodSchema.safeParse(body.billingPeriod);
 
       if (!planParsed.success || !periodParsed.success) {
@@ -39,7 +39,7 @@ export async function registerPaymentRoutes(
             error: {
               code: "invalid_request",
               message:
-                "Invalid request. `plan` must be one of starter/pro/ultra/business and `billingPeriod` must be monthly/yearly.",
+                "Invalid request. `plan` must be one of pro/team/enterprise and `billingPeriod` must be monthly/yearly.",
             },
           }),
         );
@@ -59,11 +59,12 @@ export async function registerPaymentRoutes(
       const viewer = await options.viewerService.ensureViewer(user);
       const result = await options.paymentService.createCheckout(
         viewer.workspace.id,
-        planParsed.data as SubscriptionPlan,
+        user.id,
+        planParsed.data as BillingPlanCode,
         periodParsed.data as BillingPeriod,
       );
 
-      return reply.code(200).send({ checkoutUrl: result.checkoutUrl });
+      return reply.code(200).send(result);
     } catch (error) {
       return sendPaymentError(error, reply, "checkout_failed");
     }
@@ -78,6 +79,7 @@ export async function registerPaymentRoutes(
       const viewer = await options.viewerService.ensureViewer(user);
       const status = await options.paymentService.getSubscriptionStatus(
         viewer.workspace.id,
+        user.id,
       );
 
       return reply.code(200).send(status);
@@ -93,7 +95,28 @@ export async function registerPaymentRoutes(
       if (!user) return sendUnauthenticated(reply);
 
       const viewer = await options.viewerService.ensureViewer(user);
-      await options.paymentService.cancelSubscription(viewer.workspace.id);
+      await options.paymentService.cancelSubscription(
+        viewer.workspace.id,
+        user.id,
+      );
+
+      return reply.code(200).send({ success: true });
+    } catch (error) {
+      return sendPaymentError(error, reply, "subscription_update_failed");
+    }
+  });
+
+  // POST /api/payments/resume — resume a subscription scheduled to cancel
+  app.post("/api/payments/resume", async (request, reply) => {
+    try {
+      const user = await options.auth.authenticate(request);
+      if (!user) return sendUnauthenticated(reply);
+
+      const viewer = await options.viewerService.ensureViewer(user);
+      await options.paymentService.resumeSubscription(
+        viewer.workspace.id,
+        user.id,
+      );
 
       return reply.code(200).send({ success: true });
     } catch (error) {
@@ -108,7 +131,7 @@ export async function registerPaymentRoutes(
       if (!user) return sendUnauthenticated(reply);
 
       const body = request.body as { plan?: string; billingPeriod?: string };
-      const planParsed = subscriptionPlanSchema.safeParse(body.plan);
+      const planParsed = billingPlanCodeSchema.safeParse(body.plan);
       const periodParsed = billingPeriodSchema.safeParse(body.billingPeriod);
 
       if (!planParsed.success || !periodParsed.success) {
@@ -117,7 +140,7 @@ export async function registerPaymentRoutes(
             error: {
               code: "invalid_request",
               message:
-                "Invalid request. `plan` must be one of starter/pro/ultra/business and `billingPeriod` must be monthly/yearly.",
+                "Invalid request. `plan` must be one of pro/team/enterprise and `billingPeriod` must be monthly/yearly.",
             },
           }),
         );
@@ -137,7 +160,8 @@ export async function registerPaymentRoutes(
       const viewer = await options.viewerService.ensureViewer(user);
       await options.paymentService.changePlan(
         viewer.workspace.id,
-        planParsed.data as SubscriptionPlan,
+        user.id,
+        planParsed.data as BillingPlanCode,
         periodParsed.data as BillingPeriod,
       );
 
@@ -163,6 +187,7 @@ export async function registerPaymentUnavailableRoutes(app: FastifyInstance) {
   app.post("/api/payments/checkout", unavailable);
   app.get("/api/payments/subscription", unavailable);
   app.post("/api/payments/cancel", unavailable);
+  app.post("/api/payments/resume", unavailable);
   app.post("/api/payments/change-plan", unavailable);
 }
 
