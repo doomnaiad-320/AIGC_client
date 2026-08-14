@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAdminDbClient } from "./client.js";
+import { createAdminDbClient, createUserDbClientFactory } from "./client.js";
 import type { PostgresPool } from "./postgres.js";
 
 describe("billing plan RPC mappings", () => {
@@ -81,6 +81,82 @@ describe("billing plan RPC mappings", () => {
       error: null,
     });
     expect(query).toHaveBeenCalledWith(testCase.sql, testCase.values);
+    expect(release).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runtime database roles", () => {
+  it("switches admin queries to service_role before setting request context", async () => {
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({
+      rows: [],
+    }));
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as PostgresPool;
+    const client = createAdminDbClient(
+      {
+        appJwtSecret: "test-secret",
+        databaseUrl: "postgresql:///test",
+        postgresPoolMax: 1,
+        serverPublicUrl: "http://localhost:3001",
+        storageRoot: ".test-storage",
+      },
+      pool,
+    );
+
+    await client.query("select 1");
+
+    expect(query.mock.calls.map(([sql]) => sql.trim())).toEqual([
+      "begin",
+      "set local role service_role",
+      "select set_config($1, $2, true)",
+      "select set_config($1, $2, true)",
+      "select 1",
+      "commit",
+    ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("switches user queries to authenticated before setting the user id", async () => {
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({
+      rows: [],
+    }));
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    } as unknown as PostgresPool;
+    const createUserClient = createUserDbClientFactory(
+      {
+        appJwtSecret: "test-secret",
+        databaseUrl: "postgresql:///test",
+        postgresPoolMax: 1,
+        serverPublicUrl: "http://localhost:3001",
+        storageRoot: ".test-storage",
+      },
+      pool,
+    );
+    const payload = Buffer.from(
+      JSON.stringify({ sub: "11111111-1111-4111-8111-111111111111" }),
+    ).toString("base64url");
+
+    await createUserClient(`header.${payload}.signature`)
+      .from("projects")
+      .select("id");
+
+    expect(query.mock.calls.map(([sql]) => sql.trim())).toEqual([
+      "begin",
+      "set local role authenticated",
+      "select set_config($1, $2, true)",
+      "select set_config($1, $2, true)",
+      'select t."id" from "projects" as t',
+      "commit",
+    ]);
+    expect(query).toHaveBeenNthCalledWith(
+      4,
+      "select set_config($1, $2, true)",
+      ["app.user_id", "11111111-1111-4111-8111-111111111111"],
+    );
     expect(release).toHaveBeenCalledOnce();
   });
 });

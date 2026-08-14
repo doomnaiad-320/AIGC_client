@@ -4,6 +4,8 @@ import type { ServerEnv } from "../config/env.js";
 
 export type PostgresPool = pg.Pool;
 
+export const SERVICE_ROLE_CONNECTION_OPTIONS = "-c role=service_role";
+
 export function createPostgresTypeOverrides(): pg.TypeOverrides {
   const types = new pg.TypeOverrides();
 

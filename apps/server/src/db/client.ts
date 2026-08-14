@@ -172,6 +172,11 @@ async function executeScopedQuery(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query(
+      scope.kind === "admin"
+        ? "set local role service_role"
+        : "set local role authenticated",
+    );
     await client.query("select set_config($1, $2, true)", [
       "app.is_service_role",
       scope.kind === "admin" ? "true" : "false",

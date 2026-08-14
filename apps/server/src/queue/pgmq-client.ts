@@ -1,5 +1,7 @@
 import pg from "pg";
 
+import { SERVICE_ROLE_CONNECTION_OPTIONS } from "../db/postgres.js";
+
 export type PgmqMessage<T = Record<string, unknown>> = {
   msg_id: number;
   read_ct: number;
@@ -9,16 +11,27 @@ export type PgmqMessage<T = Record<string, unknown>> = {
 };
 
 export type PgmqClient = {
-  send(queue: string, payload: Record<string, unknown>, delay?: number): Promise<number>;
-  read<T = Record<string, unknown>>(queue: string, vt: number, qty: number): Promise<PgmqMessage<T>[]>;
+  send(
+    queue: string,
+    payload: Record<string, unknown>,
+    delay?: number,
+  ): Promise<number>;
+  read<T = Record<string, unknown>>(
+    queue: string,
+    vt: number,
+    qty: number,
+  ): Promise<PgmqMessage<T>[]>;
   /**
    * Server-side long poll — blocks in Postgres until messages arrive or
    * `maxPollSeconds` elapses. Drastically reduces idle query volume vs
    * client-side sleep + read().
    */
   readWithPoll<T = Record<string, unknown>>(
-    queue: string, vt: number, qty: number,
-    maxPollSeconds?: number, pollIntervalMs?: number,
+    queue: string,
+    vt: number,
+    qty: number,
+    maxPollSeconds?: number,
+    pollIntervalMs?: number,
   ): Promise<PgmqMessage<T>[]>;
   deleteMsg(queue: string, msgId: number): Promise<boolean>;
   archive(queue: string, msgId: number): Promise<boolean>;
@@ -29,6 +42,7 @@ export type PgmqClient = {
 export function createPgmqClient(databaseUrl: string): PgmqClient {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
+    options: SERVICE_ROLE_CONNECTION_OPTIONS,
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
@@ -59,8 +73,11 @@ export function createPgmqClient(databaseUrl: string): PgmqClient {
     },
 
     async readWithPoll<T>(
-      queue: string, vt: number, qty: number,
-      maxPollSeconds = 5, pollIntervalMs = 500,
+      queue: string,
+      vt: number,
+      qty: number,
+      maxPollSeconds = 5,
+      pollIntervalMs = 500,
     ) {
       const { rows } = await pool.query(
         `SELECT * FROM pgmq.read_with_poll($1::text, $2::integer, $3::integer, $4::integer, $5::integer)`,

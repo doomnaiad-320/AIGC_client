@@ -1,5 +1,6 @@
 import { PostgresStore } from "@langchain/langgraph-checkpoint-postgres/store";
 
+import { SERVICE_ROLE_CONNECTION_OPTIONS } from "../../db/postgres.js";
 import { LANGGRAPH_PERSISTENCE_SCHEMA } from "./postgres-checkpointer.js";
 
 /**
@@ -15,6 +16,7 @@ export async function createPostgresStore(options: {
   const store = new PostgresStore({
     connectionOptions: {
       connectionString: options.connectionString,
+      options: SERVICE_ROLE_CONNECTION_OPTIONS,
       max: options.poolMax ?? DEFAULT_POOL_MAX,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,

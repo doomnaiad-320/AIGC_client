@@ -1,5 +1,7 @@
-import pg from "pg";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+import pg from "pg";
+
+import { SERVICE_ROLE_CONNECTION_OPTIONS } from "../../db/postgres.js";
 
 export const LANGGRAPH_PERSISTENCE_SCHEMA = "langgraph";
 
@@ -16,6 +18,7 @@ export async function createPostgresCheckpointer(options: {
 }) {
   const pool = new pg.Pool({
     connectionString: options.connectionString,
+    options: SERVICE_ROLE_CONNECTION_OPTIONS,
     max: options.poolMax ?? DEFAULT_POOL_MAX,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
@@ -25,7 +28,10 @@ export async function createPostgresCheckpointer(options: {
 
   // Prevent pool-level errors from crashing the process
   pool.on("error", (err) => {
-    console.error("[checkpointer-pool] Unexpected error on idle client:", err.message);
+    console.error(
+      "[checkpointer-pool] Unexpected error on idle client:",
+      err.message,
+    );
   });
 
   const checkpointer = new PostgresSaver(pool, undefined, {
