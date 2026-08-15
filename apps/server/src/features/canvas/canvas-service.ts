@@ -31,7 +31,9 @@ export type CanvasService = {
  * Format: `oss://bucket/objectPath`
  */
 const OSS_MARKER_PREFIX = "oss://";
+const ASSET_MARKER_PREFIX = "asset://";
 const CANVAS_FILES_BUCKET = "project-assets";
+const SIGNED_URL_EXPIRY_SECONDS = 3600;
 
 export function createCanvasService(options: {
   createUserClient: (accessToken: string) => UserDbClient;
@@ -52,7 +54,7 @@ export function createCanvasService(options: {
       const content = (data.content as CanvasContent) ?? { elements: [], appState: {} };
 
       // Resolve OSS-stored files back to base64 dataURLs for the frontend
-      const resolvedContent = await resolveFilesFromStorage(client, content);
+      const resolvedContent = await resolveStorageReferences(client, content);
 
       return {
         id: data.id,
@@ -66,7 +68,12 @@ export function createCanvasService(options: {
       const client = options.createUserClient(user.accessToken);
 
       // Extract base64 files to Storage, replacing dataURLs with oss:// markers
-      const leanContent = await extractFilesToStorage(client, canvasId, content);
+      const markerContent = normalizeElementStorageMarkers(content);
+      const leanContent = await extractFilesToStorage(
+        client,
+        canvasId,
+        markerContent,
+      );
 
       const { error } = await client
         .from("canvases")
@@ -85,6 +92,46 @@ export function createCanvasService(options: {
 // ---------------------------------------------------------------------------
 
 type CanvasFileRecord = Record<string, Record<string, unknown>>;
+type CanvasElementRecord = Record<string, unknown>;
+
+function normalizeElementStorageMarkers(content: CanvasContent): CanvasContent {
+  const elements = (content.elements as CanvasElementRecord[]).map((element) => {
+    if (element.type !== "embeddable") return element;
+    const customData = (element.customData ?? {}) as Record<string, unknown>;
+    const assetId = customData.assetId;
+    if (typeof assetId === "string" && assetId.length > 0) {
+      return { ...element, link: `${ASSET_MARKER_PREFIX}${assetId}` };
+    }
+
+    const bucket = customData.storageBucket;
+    const objectPath = customData.storageObjectPath;
+    if (
+      typeof bucket === "string" &&
+      typeof objectPath === "string" &&
+      bucket.length > 0 &&
+      objectPath.length > 0
+    ) {
+      return {
+        ...element,
+        link: `${OSS_MARKER_PREFIX}${bucket}/${objectPath}`,
+      };
+    }
+
+    const legacyReference = parseLegacyProjectAssetUrl(element.link);
+    if (!legacyReference) return element;
+    return {
+      ...element,
+      link: `${OSS_MARKER_PREFIX}${legacyReference.bucket}/${legacyReference.objectPath}`,
+      customData: {
+        ...customData,
+        storageBucket: legacyReference.bucket,
+        storageObjectPath: legacyReference.objectPath,
+      },
+    };
+  });
+
+  return { ...content, elements } as CanvasContent;
+}
 
 async function extractFilesToStorage(
   client: UserDbClient,
@@ -186,7 +233,7 @@ async function resolveFilesFromStorage(
     return content;
   }
 
-  // Resolve public URLs instead of downloading each file
+  // Resolve short-lived signed URLs instead of exposing tenant asset paths.
   // Group by bucket (normally all in one bucket)
   const byBucket = new Map<string, typeof ossEntries>();
   for (const entry of ossEntries) {
@@ -197,13 +244,14 @@ async function resolveFilesFromStorage(
 
   for (const [bucket, entries] of byBucket) {
     for (const entry of entries) {
-      const { data } = client.storage
+      const { data, error } = await client.storage
         .from(bucket)
-        .getPublicUrl(entry.objectPath);
+        .createSignedUrl(entry.objectPath, SIGNED_URL_EXPIRY_SECONDS);
+      if (error || !data?.signedUrl) continue;
       updatedFiles[entry.fileId] = {
         ...entry.fileData,
         dataURL: undefined,
-        storageUrl: data.publicUrl,
+        storageUrl: data.signedUrl,
       };
     }
   }
@@ -212,6 +260,97 @@ async function resolveFilesFromStorage(
     ...content,
     files: updatedFiles,
   } as CanvasContent;
+}
+
+async function resolveStorageReferences(
+  client: UserDbClient,
+  content: CanvasContent,
+): Promise<CanvasContent> {
+  const withFiles = await resolveFilesFromStorage(client, content);
+  const elements = await Promise.all(
+    (withFiles.elements as CanvasElementRecord[]).map(async (element) => {
+      if (element.type !== "embeddable") return element;
+      const link = element.link;
+      if (typeof link !== "string") return element;
+
+      let bucket: string | null = null;
+      let objectPath: string | null = null;
+      let assetId: string | null = null;
+
+      if (link.startsWith(ASSET_MARKER_PREFIX)) {
+        assetId = link.slice(ASSET_MARKER_PREFIX.length);
+        const { data: asset } = await client
+          .from("asset_objects")
+          .select("bucket, object_path")
+          .eq("id", assetId)
+          .maybeSingle();
+        if (asset) {
+          bucket = asset.bucket;
+          objectPath = asset.object_path;
+        }
+      } else if (link.startsWith(OSS_MARKER_PREFIX)) {
+        const reference = parseOssMarker(link);
+        bucket = reference?.bucket ?? null;
+        objectPath = reference?.objectPath ?? null;
+      } else {
+        const reference = parseLegacyProjectAssetUrl(link);
+        bucket = reference?.bucket ?? null;
+        objectPath = reference?.objectPath ?? null;
+      }
+
+      if (!bucket || !objectPath) return element;
+      const { data, error } = await client.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, SIGNED_URL_EXPIRY_SECONDS);
+      if (error || !data?.signedUrl) return element;
+
+      return {
+        ...element,
+        link: data.signedUrl,
+        customData: {
+          ...((element.customData ?? {}) as Record<string, unknown>),
+          ...(assetId ? { assetId } : {}),
+          storageBucket: bucket,
+          storageObjectPath: objectPath,
+        },
+      };
+    }),
+  );
+
+  return { ...withFiles, elements } as CanvasContent;
+}
+
+function parseOssMarker(
+  link: string,
+): { bucket: string; objectPath: string } | null {
+  const reference = link.slice(OSS_MARKER_PREFIX.length);
+  const slashIndex = reference.indexOf("/");
+  if (slashIndex <= 0) return null;
+  return {
+    bucket: reference.slice(0, slashIndex),
+    objectPath: reference.slice(slashIndex + 1),
+  };
+}
+
+function parseLegacyProjectAssetUrl(
+  value: unknown,
+): { bucket: "project-assets"; objectPath: string } | null {
+  if (typeof value !== "string" || value.startsWith(ASSET_MARKER_PREFIX)) {
+    return null;
+  }
+  try {
+    const url = new URL(value, "http://loomic.local");
+    const prefix = "/assets/project-assets/";
+    if (!url.pathname.startsWith(prefix)) return null;
+    const encodedPath = url.pathname.slice(prefix.length);
+    const objectPath = encodedPath
+      .split("/")
+      .map((part) => decodeURIComponent(part))
+      .join("/");
+    return objectPath ? { bucket: "project-assets", objectPath } : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

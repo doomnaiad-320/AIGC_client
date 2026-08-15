@@ -78,4 +78,65 @@ describe("JobService atomic admission", () => {
     );
     expect(query.eq).toHaveBeenCalledWith("status", "queued");
   });
+
+  it("refreshes a private result URL when a completed job is read", async () => {
+    const row = {
+      attempt_count: 1,
+      canceled_at: null,
+      canvas_id: null,
+      completed_at: "2026-08-14T00:00:00.000Z",
+      created_at: "2026-08-14T00:00:00.000Z",
+      created_by: user.id,
+      error_code: null,
+      error_message: null,
+      failed_at: null,
+      id: "33333333-3333-4333-8333-333333333333",
+      job_type: "image_generation",
+      max_attempts: 3,
+      payload: { prompt: "test" },
+      project_id: null,
+      queue_name: "image_generation_jobs",
+      result: {
+        asset_id: "44444444-4444-4444-8444-444444444444",
+        bucket: "project-assets",
+        object_path: "workspace/generated/image.png",
+      },
+      session_id: null,
+      started_at: "2026-08-14T00:00:00.000Z",
+      status: "succeeded",
+      thread_id: null,
+      updated_at: "2026-08-14T00:00:00.000Z",
+      workspace_id: "22222222-2222-4222-8222-222222222222",
+    };
+    const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+    const query = { eq: vi.fn(), maybeSingle, select: vi.fn() };
+    query.eq.mockReturnValue(query);
+    query.select.mockReturnValue(query);
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "http://localhost/private?token=signed" },
+      error: null,
+    });
+    const service = createJobService({
+      createUserClient: vi.fn(
+        () =>
+          ({
+            from: vi.fn(() => query),
+            storage: {
+              from: vi.fn(() => ({ createSignedUrl })),
+            },
+          }) as any,
+      ),
+      getAdminClient: vi.fn() as any,
+    });
+
+    const job = await service.getJob(user, row.id);
+
+    expect(job.result?.signed_url).toBe(
+      "http://localhost/private?token=signed",
+    );
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "workspace/generated/image.png",
+      3600,
+    );
+  });
 });

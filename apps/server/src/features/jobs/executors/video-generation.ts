@@ -115,14 +115,10 @@ registerExecutor("video_generation", async (jobId, _rawPayload, ctx: ExecutorCon
     }
     lap("asset_record_done");
 
-    const { data: urlData } = admin.storage
-      .from("project-assets")
-      .getPublicUrl(objectPath);
-
     lap("total");
     return {
       asset_id: (assetRow as { id: string }).id,
-      signed_url: urlData.publicUrl,
+      bucket: "project-assets",
       object_path: objectPath,
       width: generated.width,
       height: generated.height,

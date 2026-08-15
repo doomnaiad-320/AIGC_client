@@ -14,6 +14,7 @@ import type {
 } from "../../auth/user.js";
 
 const THUMBNAIL_BUCKET = "project-assets";
+const SIGNED_URL_EXPIRY_SECONDS = 3600;
 const PROJECT_QUERY_FAILED_MESSAGE = "Unable to load projects.";
 const PROJECT_CREATE_FAILED_MESSAGE = "Unable to create project.";
 const PROJECT_DELETE_FAILED_MESSAGE = "Unable to delete project.";
@@ -252,8 +253,8 @@ export function createProjectService(options: {
         ((canvases ?? []) as any[]).map((canvas: any) => [canvas.project_id, canvas]),
       );
 
-      // Generate public thumbnail URLs for projects that have them
-      const thumbnailUrls = generateThumbnailUrls(
+      // Generate short-lived thumbnail URLs for projects that have them.
+      const thumbnailUrls = await generateThumbnailUrls(
         client,
         projectRows.filter((p: any) => p.thumbnail_path),
       );
@@ -319,11 +320,18 @@ export function createProjectService(options: {
         );
       }
 
-      const { data: urlData } = client.storage
+      const { data: urlData, error: signedUrlError } = await client.storage
         .from(THUMBNAIL_BUCKET)
-        .getPublicUrl(objectPath);
+        .createSignedUrl(objectPath, SIGNED_URL_EXPIRY_SECONDS);
+      if (signedUrlError || !urlData?.signedUrl) {
+        throw new ProjectServiceError(
+          "project_create_failed",
+          "Failed to create a private thumbnail URL.",
+          500,
+        );
+      }
 
-      return { thumbnailUrl: urlData.publicUrl };
+      return { thumbnailUrl: urlData.signedUrl };
     },
 
     async updateProject(user, projectId, input) {
@@ -490,19 +498,29 @@ function slugify(value: string) {
   return base ? `${base}-${suffix}` : `project-${suffix}`;
 }
 
-function generateThumbnailUrls(
+async function generateThumbnailUrls(
   client: UserDbClient,
   projects: Array<{ id: string; thumbnail_path: string | null }>,
-): Map<string, string> {
+): Promise<Map<string, string>> {
   const urlMap = new Map<string, string>();
   if (projects.length === 0) return urlMap;
 
+  const paths = projects.flatMap((project) =>
+    project.thumbnail_path ? [project.thumbnail_path] : [],
+  );
+  const { data } = await client.storage
+    .from(THUMBNAIL_BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_EXPIRY_SECONDS);
+  const signedByPath = new Map(
+    (data ?? []).flatMap((entry) =>
+      entry.signedUrl ? [[entry.path, entry.signedUrl] as const] : [],
+    ),
+  );
+
   for (const project of projects) {
     if (!project.thumbnail_path) continue;
-    const { data } = client.storage
-      .from(THUMBNAIL_BUCKET)
-      .getPublicUrl(project.thumbnail_path);
-    urlMap.set(project.id, data.publicUrl);
+    const signedUrl = signedByPath.get(project.thumbnail_path);
+    if (signedUrl) urlMap.set(project.id, signedUrl);
   }
 
   return urlMap;

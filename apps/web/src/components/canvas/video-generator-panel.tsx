@@ -311,6 +311,7 @@ export function VideoGeneratorPanel({
           height: elementBounds.height,
           customData: {
             isVideo: true,
+            assetId: result.assetId,
             mimeType: result.mimeType,
             durationSeconds: result.durationSeconds,
             title: prompt.trim().slice(0, 60),

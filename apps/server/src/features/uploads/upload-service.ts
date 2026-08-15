@@ -5,9 +5,6 @@ import type {
   UserDbClient,
 } from "../../auth/user.js";
 
-/** Public local buckets use direct asset URLs instead of signed URLs. */
-const PUBLIC_BUCKETS = new Set(["project-assets"]);
-
 export class UploadServiceError extends Error {
   readonly statusCode: number;
   readonly code: "upload_failed" | "asset_not_found";
@@ -195,11 +192,6 @@ async function getAssetUrl(
   bucket: string,
   objectPath: string,
 ): Promise<string> {
-  if (PUBLIC_BUCKETS.has(bucket)) {
-    const { data } = client.storage.from(bucket).getPublicUrl(objectPath);
-    return data.publicUrl;
-  }
-  // Fallback for private buckets (e.g. user-avatars)
   return createSignedUrl(client, bucket, objectPath);
 }
 

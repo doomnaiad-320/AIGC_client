@@ -19,7 +19,7 @@ type ImageInsertOpts = {
 
 type VideoInsertOpts = {
   canvasId: string;
-  signedUrl: string;        // Public URL for embeddable link
+  assetId: string;
   width: number;
   height: number;
   mimeType: string;
@@ -167,10 +167,11 @@ function buildVideoElement(
     versionNonce: Math.floor(Math.random() * 2_000_000_000),
     isDeleted: false,
     updated: Date.now(),
-    link: opts.signedUrl,
+    link: `asset://${opts.assetId}`,
     locked: false,
     customData: {
       isVideo: true,
+      assetId: opts.assetId,
       mimeType: opts.mimeType,
       ...(opts.durationSeconds != null ? { durationSeconds: opts.durationSeconds } : {}),
       ...(opts.title ? { title: opts.title } : {}),

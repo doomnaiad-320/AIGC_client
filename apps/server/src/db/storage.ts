@@ -46,7 +46,7 @@ export type LocalStorageClient = {
 };
 
 const DEFAULT_STORAGE_ROOT = ".loomic-storage";
-const PUBLIC_BUCKETS = new Set(["project-assets", "canvas-screenshots"]);
+const PUBLIC_ASSET_PREFIXES = new Set(["project-assets/home-seeds/"]);
 
 export function createLocalStorageClient(
   env: Pick<ServerEnv, "appJwtSecret" | "serverPublicUrl" | "storageRoot">,
@@ -79,7 +79,7 @@ export function registerLocalStorageRoutes(
     const bucket = params.bucket;
     const objectPath = params["*"];
 
-    if (!PUBLIC_BUCKETS.has(bucket)) {
+    if (!isPublicAsset(bucket, objectPath)) {
       const token = (request.query as { token?: string }).token;
       if (!token || !isValidSignature(signingSecret, bucket, objectPath, token)) {
         return reply.code(403).send({ message: "Asset URL expired or invalid." });
@@ -99,6 +99,15 @@ export function registerLocalStorageRoutes(
 
     return reply.type(contentTypeForPath(objectPath)).send(createReadStream(filePath));
   });
+}
+
+function isPublicAsset(bucket: string, objectPath: string) {
+  const pathSegments = objectPath.replaceAll("\\", "/").split("/");
+  if (pathSegments.includes("..")) return false;
+  const normalizedPath = path.posix.normalize(pathSegments.join("/"));
+  return [...PUBLIC_ASSET_PREFIXES].some((prefix) =>
+    `${bucket}/${normalizedPath}`.startsWith(prefix),
+  );
 }
 
 function createBucketClient(options: {

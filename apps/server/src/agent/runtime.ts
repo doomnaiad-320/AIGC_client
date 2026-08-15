@@ -546,6 +546,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
 
             if (current.status === "succeeded" && current.result) {
               const result = current.result as {
+                asset_id?: string;
                 signed_url?: string;
                 object_path?: string;
                 width?: number;
@@ -744,6 +745,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
 
             if (current.status === "succeeded" && current.result) {
               const result = current.result as {
+                asset_id?: string;
                 signed_url?: string;
                 duration_seconds?: number;
                 width?: number;
@@ -754,7 +756,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
 
               // Write element directly to canvas (backend-driven insertion)
               let elementId: string | undefined;
-              if (canvasId && result.signed_url) {
+              if (canvasId && result.asset_id) {
                 try {
                   const writerClient = createClient(accessToken) as UserDbClient;
                   const explicitPlacement = (input as any).placementX != null && (input as any).placementY != null
@@ -770,7 +772,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
                     writerClient,
                     {
                       canvasId,
-                      signedUrl: result.signed_url,
+                      assetId: result.asset_id,
                       width: result.width ?? 1280,
                       height: result.height ?? 720,
                       mimeType: result.mime_type ?? "video/mp4",
@@ -897,11 +899,15 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               .upload(objectPath, buffer, { contentType: mimeType, upsert: false });
             if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
-            const { data: urlData } = client.storage
+            const { data: urlData, error: signedUrlError } =
+              await client.storage
               .from("project-assets")
-              .getPublicUrl(objectPath);
+              .createSignedUrl(objectPath, 3600);
+            if (signedUrlError || !urlData?.signedUrl) {
+              throw new Error("Failed to create signed asset URL");
+            }
 
-            return urlData.publicUrl;
+            return urlData.signedUrl;
           };
         }
 

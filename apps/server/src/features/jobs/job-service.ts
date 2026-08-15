@@ -69,7 +69,31 @@ export function createJobService(options: {
   createUserClient: (accessToken: string) => UserDbClient;
   getAdminClient: () => AdminDbClient;
 }): JobService {
-  function mapJobRow(row: Record<string, unknown>): BackgroundJob {
+  async function mapJobRow(
+    row: Record<string, unknown>,
+    client: UserDbClient | AdminDbClient,
+  ): Promise<BackgroundJob> {
+    const rawResult = (row.result as Record<string, unknown>) ?? null;
+    let result = rawResult;
+    const objectPath = rawResult?.object_path;
+    if (typeof objectPath === "string" && objectPath.length > 0) {
+      const bucket =
+        typeof rawResult.bucket === "string"
+          ? rawResult.bucket
+          : "project-assets";
+      const { data, error } = await client.storage
+        .from(bucket)
+        .createSignedUrl(objectPath, 3600);
+      if (error || !data?.signedUrl) {
+        throw new JobServiceError(
+          "job_query_failed",
+          "Failed to create a private asset URL for this job.",
+          500,
+        );
+      }
+      result = { ...rawResult, signed_url: data.signedUrl };
+    }
+
     return {
       id: row.id as string,
       workspace_id: row.workspace_id as string,
@@ -81,7 +105,7 @@ export function createJobService(options: {
       job_type: row.job_type as BackgroundJob["job_type"],
       status: row.status as BackgroundJob["status"],
       payload: (row.payload as Record<string, unknown>) ?? {},
-      result: (row.result as Record<string, unknown>) ?? null,
+      result,
       error_code: (row.error_code as string) ?? null,
       error_message: (row.error_message as string) ?? null,
       attempt_count: row.attempt_count as number,
@@ -160,7 +184,10 @@ export function createJobService(options: {
         );
       }
 
-      return mapJobRow(job as unknown as Record<string, unknown>);
+      return await mapJobRow(
+        job as unknown as Record<string, unknown>,
+        client,
+      );
     },
 
     async getJob(user, jobId) {
@@ -177,7 +204,10 @@ export function createJobService(options: {
       if (!job) {
         throw new JobServiceError("job_not_found", "Job not found.", 404);
       }
-      return mapJobRow(job as unknown as Record<string, unknown>);
+      return await mapJobRow(
+        job as unknown as Record<string, unknown>,
+        client,
+      );
     },
 
     async listJobs(user, filters) {
@@ -196,8 +226,10 @@ export function createJobService(options: {
       if (error) {
         throw new JobServiceError("job_query_failed", "Failed to list jobs.", 500);
       }
-      return ((jobs ?? []) as any[]).map((row: any) =>
-        mapJobRow(row as unknown as Record<string, unknown>),
+      return await Promise.all(
+        ((jobs ?? []) as any[]).map((row: any) =>
+          mapJobRow(row as unknown as Record<string, unknown>, client),
+        ),
       );
     },
 
@@ -221,7 +253,10 @@ export function createJobService(options: {
           404,
         );
       }
-      return mapJobRow(job as unknown as Record<string, unknown>);
+      return await mapJobRow(
+        job as unknown as Record<string, unknown>,
+        client,
+      );
     },
 
     async getJobAdmin(jobId) {
@@ -238,7 +273,10 @@ export function createJobService(options: {
       if (!job) {
         throw new JobServiceError("job_not_found", "Job not found.", 404);
       }
-      return mapJobRow(job as unknown as Record<string, unknown>);
+      return await mapJobRow(
+        job as unknown as Record<string, unknown>,
+        admin,
+      );
     },
 
     // --- Admin-only methods (admin client, bypasses RLS) ---
