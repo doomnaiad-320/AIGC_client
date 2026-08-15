@@ -505,6 +505,10 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             ...(canvasId ? { canvasId } : {}),
             ...(sessionId ? { sessionId } : {}),
             jobType: "image_generation",
+            ...(creditsCost > 0 ? { creditsCost } : {}),
+            ...(creditsCost > 0
+              ? { creditDescription: `Image generation: ${input.model}` }
+              : {}),
             payload: {
               prompt: input.prompt,
               title: input.title,
@@ -515,19 +519,6 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             },
           });
 
-          // Deduct credits after job creation
-          if (options.creditService && creditsCost > 0) {
-            try {
-              const txId = await options.creditService.deductCredits(
-                workspaceId, userId, creditsCost, job.id,
-                `Image generation: ${input.model}`,
-              );
-              await jobSvc.setCreditsInfo(job.id, creditsCost, txId);
-            } catch (deductError) {
-              await jobSvc.cancelJob(user, job.id).catch(() => {});
-              throw deductError;
-            }
-          }
           jobLap("job_created", { jobId: job.id, creditsCost, sessionId, runId });
 
           // Poll until terminal state
@@ -703,6 +694,10 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             ...(canvasId ? { canvasId } : {}),
             ...(sessionId ? { sessionId } : {}),
             jobType: "video_generation",
+            ...(creditsCost > 0 ? { creditsCost } : {}),
+            ...(creditsCost > 0
+              ? { creditDescription: `Video generation: ${input.model}` }
+              : {}),
             payload: {
               prompt: input.prompt,
               model: input.model,
@@ -715,19 +710,6 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
             },
           });
 
-          // Deduct credits after job creation
-          if (options.creditService && creditsCost > 0) {
-            try {
-              const txId = await options.creditService.deductCredits(
-                workspaceId, userId, creditsCost, job.id,
-                `Video generation: ${input.model}`,
-              );
-              await jobSvc.setCreditsInfo(job.id, creditsCost, txId);
-            } catch (deductError) {
-              await jobSvc.cancelJob(user, job.id).catch(() => {});
-              throw deductError;
-            }
-          }
           jobLap("job_created", { jobId: job.id, creditsCost, sessionId, runId });
 
           // Poll until terminal state — video generation is slower.

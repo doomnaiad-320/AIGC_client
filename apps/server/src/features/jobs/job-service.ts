@@ -16,6 +16,7 @@ export class JobServiceError extends Error {
   readonly code:
     | "job_not_found"
     | "job_create_failed"
+    | "insufficient_credits"
     | "job_forbidden"
     | "job_invalid_reference"
     | "concurrency_limit"
@@ -42,6 +43,8 @@ export type CreateJobInput = {
   threadId?: string;
   jobType: BackgroundJobType;
   payload: Record<string, unknown>;
+  creditsCost?: number;
+  creditDescription?: string;
 };
 
 export type JobService = {
@@ -55,8 +58,7 @@ export type JobService = {
   getJobAdmin(jobId: string): Promise<BackgroundJob>;
 
   // Admin-only methods (use admin client, no user auth)
-  setCreditsInfo(jobId: string, creditsCost: number, transactionId: string): Promise<void>;
-  markRunning(jobId: string): Promise<void>;
+  markRunning(jobId: string): Promise<boolean>;
   markSucceeded(jobId: string, result: Record<string, unknown>): Promise<void>;
   markFailed(jobId: string, errorCode: string, errorMessage: string): Promise<void>;
   markDeadLetter(jobId: string, errorCode: string, errorMessage: string): Promise<void>;
@@ -110,6 +112,9 @@ export function createJobService(options: {
           p_thread_id: input.threadId ?? null,
           p_job_type: input.jobType,
           p_payload: input.payload,
+          p_user_id: user.id,
+          p_credits_cost: input.creditsCost ?? 0,
+          p_credit_description: input.creditDescription ?? null,
         },
       );
 
@@ -119,6 +124,13 @@ export function createJobService(options: {
             "concurrency_limit",
             "Concurrent generation limit reached. Wait for a job to finish or upgrade your plan.",
             429,
+          );
+        }
+        if (error?.message.includes("INSUFFICIENT_CREDITS")) {
+          throw new JobServiceError(
+            "insufficient_credits",
+            "Not enough credits to perform this action.",
+            402,
           );
         }
         if (error?.message.includes("GENERATION_WORKSPACE_ACCESS_DENIED")) {
@@ -231,24 +243,23 @@ export function createJobService(options: {
 
     // --- Admin-only methods (admin client, bypasses RLS) ---
 
-    async setCreditsInfo(jobId, creditsCost, transactionId) {
-      const admin = options.getAdminClient();
-      await admin
-        .from("background_jobs")
-        .update({
-          credits_cost: creditsCost,
-          credits_transaction_id: transactionId,
-        })
-        .eq("id", jobId);
-    },
-
     async markRunning(jobId) {
       const admin = options.getAdminClient();
-      await admin
+      const { data, error } = await admin
         .from("background_jobs")
         .update({ status: "running", started_at: new Date().toISOString() })
         .eq("id", jobId)
-        .eq("status", "queued");
+        .eq("status", "queued")
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        throw new JobServiceError(
+          "job_query_failed",
+          "Failed to claim job.",
+          500,
+        );
+      }
+      return Boolean(data);
     },
 
     async markSucceeded(jobId, result) {

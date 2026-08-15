@@ -82,6 +82,10 @@ export async function registerJobRoutes(
           ? { threadId: payload.thread_id }
           : {}),
         jobType: "image_generation",
+        ...(creditsCost > 0 ? { creditsCost } : {}),
+        ...(creditsCost > 0
+          ? { creditDescription: `Image generation: ${model}` }
+          : {}),
         payload: {
           prompt: payload.prompt,
           ...(payload.model !== undefined ? { model: payload.model } : {}),
@@ -90,24 +94,6 @@ export async function registerJobRoutes(
             : {}),
         },
       });
-
-      // Deduct credits after job creation (we need the job ID for tracking)
-      if (options.creditService && creditsCost > 0) {
-        try {
-          const txId = await options.creditService.deductCredits(
-            viewer.workspace.id,
-            user.id,
-            creditsCost,
-            job.id,
-            `Image generation: ${model}`,
-          );
-          await options.jobService.setCreditsInfo(job.id, creditsCost, txId);
-        } catch (deductError) {
-          // Deduction failed — cancel the job and re-throw
-          await options.jobService.cancelJob(user, job.id).catch(() => {});
-          throw deductError;
-        }
-      }
 
       return reply.code(201).send(jobResponseSchema.parse({ job }));
     } catch (error) {
@@ -157,6 +143,10 @@ export async function registerJobRoutes(
           ? { threadId: payload.thread_id }
           : {}),
         jobType: "video_generation",
+        ...(creditsCost > 0 ? { creditsCost } : {}),
+        ...(creditsCost > 0
+          ? { creditDescription: `Video generation: ${model}` }
+          : {}),
         payload: {
           prompt: payload.prompt,
           ...(payload.model !== undefined ? { model: payload.model } : {}),
@@ -180,23 +170,6 @@ export async function registerJobRoutes(
             : {}),
         },
       });
-
-      // Deduct credits after job creation
-      if (options.creditService && creditsCost > 0) {
-        try {
-          const txId = await options.creditService.deductCredits(
-            viewer.workspace.id,
-            user.id,
-            creditsCost,
-            job.id,
-            `Video generation: ${model}`,
-          );
-          await options.jobService.setCreditsInfo(job.id, creditsCost, txId);
-        } catch (deductError) {
-          await options.jobService.cancelJob(user, job.id).catch(() => {});
-          throw deductError;
-        }
-      }
 
       return reply.code(201).send(jobResponseSchema.parse({ job }));
     } catch (error) {

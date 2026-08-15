@@ -43,6 +43,39 @@ describe("JobService atomic admission", () => {
       p_thread_id: null,
       p_job_type: "image_generation",
       p_payload: { prompt: "test" },
+      p_user_id: user.id,
+      p_credits_cost: 0,
+      p_credit_description: null,
     });
+  });
+
+  it.each([
+    { claimed: true, row: { id: "33333333-3333-4333-8333-333333333333" } },
+    { claimed: false, row: null },
+  ])("returns $claimed when the queued job claim resolves", async ({ claimed, row }) => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+    const query = {
+      eq: vi.fn(),
+      maybeSingle,
+      select: vi.fn(),
+      update: vi.fn(),
+    };
+    query.update.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.select.mockReturnValue(query);
+    const service = createJobService({
+      createUserClient: vi.fn() as any,
+      getAdminClient: vi.fn(() => ({
+        from: vi.fn(() => query),
+      })) as any,
+    });
+
+    await expect(
+      service.markRunning("33333333-3333-4333-8333-333333333333"),
+    ).resolves.toBe(claimed);
+    expect(query.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "running" }),
+    );
+    expect(query.eq).toHaveBeenCalledWith("status", "queued");
   });
 });

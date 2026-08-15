@@ -13,6 +13,7 @@
     "admin:revoke": "node scripts/grant-platform-admin.mjs --revoke",
     "test:postgres-smoke": "node scripts/smoke-postgres-local.mjs",
     "test:rls-isolation": "node scripts/test-runtime-rls-isolation.mjs",
+    "test:atomic-admission": "node scripts/test-atomic-generation-admission.mjs",
     "test:billing-ledger": "node scripts/test-billing-ledger-local.mjs",
     "test:local-subscription": "node scripts/test-local-subscription-lifecycle.mjs",
     "test:workspace": "node --test tests/workspace.test.mjs",

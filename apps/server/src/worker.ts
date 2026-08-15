@@ -181,11 +181,16 @@ async function processMessage(
     return;
   }
 
-  // Increment attempt count
-  const { attempt_count, max_attempts } = await ctx.jobService.incrementAttempt(jobId);
+  // Only the worker that atomically moves queued -> running may execute the
+  // provider call. Duplicate/stale queue messages are acknowledged here.
+  const claimed = await ctx.jobService.markRunning(jobId);
+  if (!claimed) {
+    await ctx.pgmq.deleteMsg(queue, msg.msg_id);
+    console.log(`${tag} Skipped unclaimable job ${jobId}`);
+    return;
+  }
 
-  // Mark running
-  await ctx.jobService.markRunning(jobId);
+  const { attempt_count, max_attempts } = await ctx.jobService.incrementAttempt(jobId);
 
   try {
     const result = await executor(jobId, msg.message as Record<string, unknown>, ctx);

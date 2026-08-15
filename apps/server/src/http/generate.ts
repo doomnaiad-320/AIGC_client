@@ -105,6 +105,10 @@ export async function registerGenerateRoutes(
       const job = await options.jobService.createJob(user, {
         workspaceId: viewer.workspace.id,
         jobType: "image_generation",
+        ...(creditsCost > 0 ? { creditsCost } : {}),
+        ...(creditsCost > 0
+          ? { creditDescription: `Direct image generation: ${model}` }
+          : {}),
         payload: {
           prompt: payload.prompt,
           model,
@@ -112,22 +116,6 @@ export async function registerGenerateRoutes(
           ...(payload.quality ? { quality: payload.quality } : {}),
         },
       });
-
-      if (options.creditService && creditsCost > 0) {
-        try {
-          const txId = await options.creditService.deductCredits(
-            viewer.workspace.id,
-            user.id,
-            creditsCost,
-            job.id,
-            `Direct image generation: ${model}`,
-          );
-          await options.jobService.setCreditsInfo(job.id, creditsCost, txId);
-        } catch (deductError) {
-          await options.jobService.cancelJob(user, job.id).catch(() => {});
-          throw deductError;
-        }
-      }
 
       const result = await pollJobUntilDone(
         options.jobService,
@@ -265,6 +253,10 @@ export async function registerGenerateRoutes(
       const job = await options.jobService.createJob(user, {
         workspaceId,
         jobType: "video_generation",
+        ...(creditsCost > 0 ? { creditsCost } : {}),
+        ...(creditsCost > 0
+          ? { creditDescription: `Direct video generation: ${model}` }
+          : {}),
         payload: {
           prompt: payload.prompt,
           model,
@@ -276,23 +268,6 @@ export async function registerGenerateRoutes(
             : {}),
         },
       });
-
-      // ── Deduct credits BEFORE generation ──
-      if (options.creditService && creditsCost > 0) {
-        try {
-          const txId = await options.creditService.deductCredits(
-            workspaceId,
-            user.id,
-            creditsCost,
-            job.id,
-            `Direct video generation: ${model}`,
-          );
-          await options.jobService.setCreditsInfo(job.id, creditsCost, txId);
-        } catch (deductError) {
-          await options.jobService.cancelJob(user, job.id).catch(() => {});
-          throw deductError;
-        }
-      }
 
       // ── Poll until terminal state ──
       const POLL_INTERVAL = 3_000;

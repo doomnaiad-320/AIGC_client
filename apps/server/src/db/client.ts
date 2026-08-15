@@ -597,7 +597,7 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
       };
     case "create_and_enqueue_generation_job":
       return {
-        sql: "select * from public.create_and_enqueue_generation_job($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::public.background_job_type, $7::jsonb)",
+        sql: "select * from public.create_and_enqueue_generation_job($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::public.background_job_type, $7::jsonb, $8::uuid, $9::int, $10::text)",
         values: [
           args.p_workspace_id,
           args.p_project_id ?? null,
@@ -606,6 +606,9 @@ function buildRpc(functionName: string, args: Record<string, unknown>) {
           args.p_thread_id ?? null,
           args.p_job_type,
           JSON.stringify(args.p_payload ?? {}),
+          args.p_user_id,
+          args.p_credits_cost ?? 0,
+          args.p_credit_description ?? null,
         ],
       };
     case "admin_adjust_credits":

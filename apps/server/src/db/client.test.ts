@@ -199,6 +199,9 @@ describe("generation admission RPC mapping", () => {
       p_thread_id: null,
       p_job_type: "image_generation",
       p_payload: payload,
+      p_user_id: "11111111-1111-4111-8111-111111111111",
+      p_credits_cost: 25,
+      p_credit_description: "Image generation: test-model",
     });
 
     expect(result).toEqual({
@@ -209,7 +212,7 @@ describe("generation admission RPC mapping", () => {
       error: null,
     });
     expect(query).toHaveBeenCalledWith(
-      "select * from public.create_and_enqueue_generation_job($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::public.background_job_type, $7::jsonb)",
+      "select * from public.create_and_enqueue_generation_job($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::public.background_job_type, $7::jsonb, $8::uuid, $9::int, $10::text)",
       [
         "11111111-1111-4111-8111-111111111111",
         null,
@@ -218,6 +221,9 @@ describe("generation admission RPC mapping", () => {
         null,
         "image_generation",
         JSON.stringify(payload),
+        "11111111-1111-4111-8111-111111111111",
+        25,
+        "Image generation: test-model",
       ],
     );
     expect(release).toHaveBeenCalledOnce();
