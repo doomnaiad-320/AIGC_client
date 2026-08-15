@@ -139,6 +139,27 @@ function makeService(isAdmin: boolean): PlatformAdminService {
     updateBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
     createBillingPlanDraft: vi.fn().mockResolvedValue([billingPlan]),
     publishBillingPlan: vi.fn().mockResolvedValue([billingPlan]),
+    listTopUpPacks: vi.fn().mockResolvedValue([]),
+    saveTopUpPackDraft: vi.fn().mockResolvedValue([]),
+    publishTopUpPack: vi.fn().mockResolvedValue([]),
+    getPaymentProviderConfig: vi.fn().mockResolvedValue({
+      providerCode: "dulupay",
+      displayName: "DuluPay",
+      enabled: false,
+      apiBaseUrl: "https://api.dulupay.com/api",
+      merchantId: null,
+      hasMerchantPrivateKey: false,
+      platformPublicKey: null,
+      allowedMethods: ["alipay", "wxpay"],
+      callbackToleranceSeconds: 86400,
+      encryptionReady: true,
+      updatedAt: "2026-08-10T00:00:00.000Z",
+    }),
+    updatePaymentProviderConfig: vi.fn(),
+    testPaymentProvider: vi.fn().mockResolvedValue({
+      merchantStatus: 1,
+      payStatus: 1,
+    }),
   };
 }
 
@@ -473,6 +494,107 @@ describe("admin routes", () => {
     });
     expect(response.statusCode).toBe(400);
     expect(service.publishBillingPlan).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("saves a point-pack draft with the platform administrator as actor", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const input = {
+      code: "credits_5000",
+      nameZh: "5,000 点数包",
+      descriptionZh: "永久有效",
+      credits: 5000,
+      currency: "USD",
+      priceMinor: 999,
+      minimumPlanCode: "pro",
+      sortOrder: 10,
+      dulupayAmountMinor: 6900,
+      reason: "新增专业版点数包",
+    };
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/admin/billing/top-up-packs/draft",
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(service.saveTopUpPackDraft).toHaveBeenCalledWith(
+      adminUser.id,
+      input,
+    );
+    await app.close();
+  });
+
+  it("lists legacy unpriced point-pack drafts so administrators can configure them", async () => {
+    const service = makeService(true);
+    service.listTopUpPacks = vi.fn().mockResolvedValue([
+      {
+        code: "credits_1000",
+        draft: {
+          id: "88888888-8888-4888-8888-888888888888",
+          code: "credits_1000",
+          version: 1,
+          nameZh: "小型点数包",
+          descriptionZh: "",
+          credits: 1000,
+          currency: "USD",
+          priceMinor: 0,
+          status: "draft",
+          minimumPlanCode: "pro",
+          sortOrder: 0,
+          providerPrice: null,
+          publishedAt: null,
+          retiredAt: null,
+          createdAt: "2026-08-10T00:00:00.000Z",
+        },
+        published: null,
+        retiredVersions: [],
+      },
+    ]);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/billing/top-up-packs",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().packs[0].draft.priceMinor).toBe(0);
+    await app.close();
+  });
+
+  it("protects payment provider configuration from workspace-only administrators", async () => {
+    const service = makeService(false);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/payments/providers/dulupay",
+    });
+    expect(response.statusCode).toBe(403);
+    expect(service.getPaymentProviderConfig).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("tests DuluPay credentials only through the protected admin route", async () => {
+    const service = makeService(true);
+    const app = await makeApp(
+      { authenticate: vi.fn().mockResolvedValue(adminUser) },
+      service,
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/payments/providers/dulupay/test",
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ merchantStatus: 1, payStatus: 1 });
     await app.close();
   });
 });

@@ -8,6 +8,7 @@ export * from "./postgres/database.js";
 export * from "./brand-kit-contracts.js";
 export * from "./admin-contracts.js";
 export * from "./billing-contracts.js";
+export * from "./payment-contracts.js";
 export * from "./job-contracts.js";
 export * from "./skill-contracts.js";
 export * from "./ws-protocol.js";

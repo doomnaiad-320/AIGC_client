@@ -67,13 +67,13 @@ import {
   type JobService,
   createJobService,
 } from "./features/jobs/job-service.js";
-import { createLemonSqueezyClient } from "./features/payments/lemon-squeezy-client.js";
 import { createLocalSubscriptionService } from "./features/payments/local-subscription-service.js";
+import { createPaymentCredentialCrypto } from "./features/payments/payment-credential-crypto.js";
+import type { PaymentService } from "./features/payments/payment-service.js";
 import {
-  type PaymentService,
-  buildVariantMap,
-  createPaymentService,
-} from "./features/payments/payment-service.js";
+  type TopUpPaymentService,
+  createTopUpPaymentService,
+} from "./features/payments/top-up-payment-service.js";
 import {
   type ProjectService,
   createProjectService,
@@ -101,7 +101,6 @@ import { registerImageModelRoutes } from "./http/image-models.js";
 import { registerImageProxyRoute } from "./http/image-proxy.js";
 import { registerJobRoutes } from "./http/jobs.js";
 import { registerModelRoutes } from "./http/models.js";
-import { registerPaymentWebhookRoute } from "./http/payments-webhook.js";
 import {
   registerPaymentRoutes,
   registerPaymentUnavailableRoutes,
@@ -111,6 +110,7 @@ import { registerRunRoutes } from "./http/runs.js";
 import { registerSettingsRoutes } from "./http/settings.js";
 import { registerMarketplaceRoutes } from "./http/skills-marketplace.js";
 import { registerSkillRoutes } from "./http/skills.js";
+import { registerTopUpPaymentRoutes } from "./http/top-up-payments.js";
 import { registerUploadRoutes } from "./http/uploads.js";
 import { registerVideoModelRoutes } from "./http/video-models.js";
 import { registerViewerRoutes } from "./http/viewer.js";
@@ -134,6 +134,7 @@ export type BuildAppOptions = {
   env?: Partial<ServerEnv>;
   jobService?: JobService;
   paymentService?: PaymentService;
+  topUpPaymentService?: TopUpPaymentService;
   tierGuard?: TierGuard;
   uploadService?: UploadService;
   mockEventDelayMs?: number;
@@ -216,11 +217,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const creditService =
     options.creditService ??
     createCreditService({ getAdminClient, billingCatalogService });
+  const credentialCrypto = createPaymentCredentialCrypto(
+    env.paymentConfigEncryptionKey ?? env.appJwtSecret,
+  );
   const adminService =
     options.adminService ??
     createPlatformAdminService({
       getAdminClient,
       billingCatalogService,
+      credentialCrypto,
       onUserAuthChanged: invalidateAuthCacheForUser,
     });
   const tierGuard =
@@ -229,27 +234,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // Optional payment adapter. Local mode exercises the real PostgreSQL
   // lifecycle without requiring a payment provider during development.
   let paymentService: PaymentService | undefined = options.paymentService;
-  let paymentAdapter: "injected" | "lemon_squeezy" | "local" | undefined =
-    paymentService ? "injected" : undefined;
-  if (!paymentService && env.lemonSqueezyApiKey && env.lemonSqueezyStoreId) {
-    const lsClient = createLemonSqueezyClient({
-      apiKey: env.lemonSqueezyApiKey,
-      storeId: env.lemonSqueezyStoreId,
-    });
-    paymentService = createPaymentService({
-      lemonSqueezy: lsClient,
-      getAdminClient,
-      variantMap: buildVariantMap(env),
-      webOrigin: env.webOrigin,
-    });
-    paymentAdapter = "lemon_squeezy";
-  } else if (!paymentService && env.billingLocalSubscriptionsEnabled) {
+  if (!paymentService && env.billingLocalSubscriptionsEnabled) {
     paymentService = createLocalSubscriptionService({
       getAdminClient,
       webOrigin: env.webOrigin,
     });
-    paymentAdapter = "local";
   }
+  const topUpPaymentService =
+    options.topUpPaymentService ??
+    createTopUpPaymentService({
+      credentialCrypto,
+      getAdminClient,
+      serverPublicUrl: env.serverPublicUrl ?? `http://localhost:${env.port}`,
+      webOrigin: env.webOrigin,
+    });
 
   const connectionManager =
     options.connectionManager ?? new ConnectionManager();
@@ -366,6 +364,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     viewerService,
   });
   void registerAdminRoutes(app, { auth, adminService });
+  void registerTopUpPaymentRoutes(app, {
+    auth,
+    paymentService: topUpPaymentService,
+    viewerService,
+    webOrigin: env.webOrigin,
+  });
   if (jobService) {
     void registerJobRoutes(app, {
       auth,
@@ -385,21 +389,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // Expose checkout routes only when a payment adapter is configured.
   if (paymentService) {
     void registerPaymentRoutes(app, { auth, paymentService, viewerService });
-
-    if (paymentAdapter !== "local" && env.lemonSqueezyWebhookSecret) {
-      const configuredPaymentService = paymentService;
-      const webhookSecret = env.lemonSqueezyWebhookSecret;
-      // Webhook route is registered in an encapsulated plugin so the custom
-      // content-type parser (needed for raw body access) does not leak to
-      // other routes.
-      void app.register(async (webhookScope) => {
-        await registerPaymentWebhookRoute(webhookScope, {
-          getAdminClient,
-          paymentService: configuredPaymentService,
-          webhookSecret,
-        });
-      });
-    }
   } else {
     void registerPaymentUnavailableRoutes(app);
   }

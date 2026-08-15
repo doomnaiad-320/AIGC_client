@@ -347,3 +347,99 @@ export const adminBillingPlanMutationSchema = z.object({
 export type AdminBillingPlanMutation = z.infer<
   typeof adminBillingPlanMutationSchema
 >;
+
+export const topUpPackStatusSchema = z.enum(["draft", "published", "retired"]);
+
+export const adminTopUpProviderPriceSchema = z.object({
+  providerCode: z.literal("dulupay"),
+  currency: z.literal("CNY"),
+  amountMinor: z.number().int().positive(),
+});
+export type AdminTopUpProviderPrice = z.infer<
+  typeof adminTopUpProviderPriceSchema
+>;
+
+export const adminTopUpPackVersionSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string().regex(/^[a-z][a-z0-9_-]{1,49}$/),
+  version: z.number().int().positive(),
+  nameZh: z.string().min(1).max(100),
+  descriptionZh: z.string().max(500),
+  credits: z.number().int().positive(),
+  currency: z.literal("USD"),
+  // Legacy and newly initialized drafts may be intentionally unpriced. The
+  // save/publish mutations still require a positive sellable price.
+  priceMinor: z.number().int().nonnegative(),
+  status: topUpPackStatusSchema,
+  minimumPlanCode: z.enum(["pro", "team"]),
+  sortOrder: z.number().int(),
+  providerPrice: adminTopUpProviderPriceSchema.nullable(),
+  publishedAt: z.string().datetime().nullable(),
+  retiredAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type AdminTopUpPackVersion = z.infer<typeof adminTopUpPackVersionSchema>;
+
+export const adminTopUpPackSchema = z.object({
+  code: z.string().regex(/^[a-z][a-z0-9_-]{1,49}$/),
+  draft: adminTopUpPackVersionSchema.nullable(),
+  published: adminTopUpPackVersionSchema.nullable(),
+  retiredVersions: z.array(adminTopUpPackVersionSchema),
+});
+export type AdminTopUpPack = z.infer<typeof adminTopUpPackSchema>;
+
+export const adminSaveTopUpPackDraftSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^[a-z][a-z0-9_-]{1,49}$/),
+  nameZh: z.string().trim().min(1).max(100),
+  descriptionZh: z.string().trim().max(500),
+  credits: z.number().int().positive().max(100_000_000),
+  currency: z.literal("USD"),
+  priceMinor: z.number().int().positive().max(100_000_000),
+  minimumPlanCode: z.enum(["pro", "team"]),
+  sortOrder: z.number().int().min(-10_000).max(10_000),
+  dulupayAmountMinor: z.number().int().positive().max(100_000_000),
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminSaveTopUpPackDraft = z.infer<
+  typeof adminSaveTopUpPackDraftSchema
+>;
+
+export const paymentMethodSchema = z.enum(["alipay", "wxpay"]);
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
+
+export const adminPaymentProviderConfigSchema = z.object({
+  providerCode: z.literal("dulupay"),
+  displayName: z.string(),
+  enabled: z.boolean(),
+  apiBaseUrl: z.string().url(),
+  merchantId: z.string().nullable(),
+  hasMerchantPrivateKey: z.boolean(),
+  platformPublicKey: z.string().nullable(),
+  allowedMethods: z.array(paymentMethodSchema).min(1),
+  callbackToleranceSeconds: z.number().int().min(60).max(604_800),
+  encryptionReady: z.boolean(),
+  updatedAt: z.string().datetime(),
+});
+export type AdminPaymentProviderConfig = z.infer<
+  typeof adminPaymentProviderConfigSchema
+>;
+
+export const adminUpdatePaymentProviderConfigSchema = z.object({
+  enabled: z.boolean(),
+  apiBaseUrl: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("https://")),
+  merchantId: z.string().trim().min(1).max(100),
+  merchantPrivateKey: z.string().trim().min(1).optional(),
+  platformPublicKey: z.string().trim().min(1),
+  allowedMethods: z.array(paymentMethodSchema).min(1),
+  callbackToleranceSeconds: z.number().int().min(60).max(604_800),
+  reason: z.string().trim().min(3).max(500),
+});
+export type AdminUpdatePaymentProviderConfig = z.infer<
+  typeof adminUpdatePaymentProviderConfigSchema
+>;

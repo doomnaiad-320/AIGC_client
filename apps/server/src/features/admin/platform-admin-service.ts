@@ -13,9 +13,13 @@ import type {
   AdminOverview,
   AdminPasswordResetRequest,
   AdminPasswordResetResponse,
+  AdminPaymentProviderConfig,
   AdminPlatformAdmin,
   AdminPlatformAdminMutationRequest,
+  AdminSaveTopUpPackDraft,
+  AdminTopUpPack,
   AdminUpdateBillingPlanDraft,
+  AdminUpdatePaymentProviderConfig,
   AdminUpdateUserRequest,
   AdminUpdateUserStatusRequest,
   AdminUser,
@@ -29,6 +33,8 @@ import type {
 
 import type { AdminDbClient } from "../../db/client.js";
 import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
+import { createDuluPayClient } from "../payments/dulupay-client.js";
+import type { PaymentCredentialCrypto } from "../payments/payment-credential-crypto.js";
 
 export class PlatformAdminServiceError extends Error {
   constructor(
@@ -48,6 +54,10 @@ export class PlatformAdminServiceError extends Error {
       | "admin_billing_plan_draft_exists"
       | "admin_billing_plan_update_failed"
       | "admin_billing_plan_publish_failed"
+      | "admin_top_up_pack_update_failed"
+      | "admin_top_up_pack_publish_failed"
+      | "admin_payment_provider_update_failed"
+      | "admin_payment_provider_test_failed"
       | "credit_adjustment_failed",
     message: string,
     readonly statusCode: number,
@@ -134,6 +144,22 @@ export type PlatformAdminService = {
     planCode: string,
     input: AdminBillingPlanMutation,
   ): Promise<AdminBillingPlan[]>;
+  listTopUpPacks(): Promise<AdminTopUpPack[]>;
+  saveTopUpPackDraft(
+    actorUserId: string,
+    input: AdminSaveTopUpPackDraft,
+  ): Promise<AdminTopUpPack[]>;
+  publishTopUpPack(
+    actorUserId: string,
+    code: string,
+    input: AdminBillingPlanMutation,
+  ): Promise<AdminTopUpPack[]>;
+  getPaymentProviderConfig(): Promise<AdminPaymentProviderConfig>;
+  updatePaymentProviderConfig(
+    actorUserId: string,
+    input: AdminUpdatePaymentProviderConfig,
+  ): Promise<AdminPaymentProviderConfig>;
+  testPaymentProvider(): Promise<{ merchantStatus: number; payStatus: number }>;
 };
 
 const USER_COLUMNS = `
@@ -200,6 +226,7 @@ const WORKSPACE_JOINS = `
 export function createPlatformAdminService(options: {
   getAdminClient: () => AdminDbClient;
   billingCatalogService: BillingCatalogService;
+  credentialCrypto: PaymentCredentialCrypto;
   onUserAuthChanged?: (userId: string) => void;
 }): PlatformAdminService {
   const getAdmin = options.getAdminClient;
@@ -1126,6 +1153,280 @@ export function createPlatformAdminService(options: {
         throw mapBillingError(error.message, "publish");
       }
       return service.listBillingPlans();
+    },
+
+    async listTopUpPacks() {
+      const { data, error } = await getAdmin().query<{
+        code: string;
+        createdAt: string;
+        credits: number;
+        descriptionZh: string;
+        id: string;
+        minimumPlanCode: "pro" | "team";
+        nameZh: string;
+        priceMinor: number;
+        providerAmountMinor: number | null;
+        providerCurrency: "CNY" | null;
+        publishedAt: string | null;
+        retiredAt: string | null;
+        sortOrder: number;
+        status: "draft" | "published" | "retired";
+        version: number;
+      }>(
+        `select
+           pack.id,
+           pack.code,
+           pack.version,
+           pack.name_zh as "nameZh",
+           pack.description_zh as "descriptionZh",
+           pack.credits,
+           pack.price_minor as "priceMinor",
+           pack.status,
+           pack.minimum_plan_code as "minimumPlanCode",
+           pack.sort_order as "sortOrder",
+           pack.published_at as "publishedAt",
+           pack.retired_at as "retiredAt",
+           pack.created_at as "createdAt",
+           price.currency as "providerCurrency",
+           price.amount_minor as "providerAmountMinor"
+         from public.billing_top_up_packs pack
+         left join public.billing_top_up_pack_provider_prices price
+           on price.top_up_pack_id = pack.id
+          and price.provider_code = 'dulupay'
+         order by pack.sort_order, pack.code, pack.version desc`,
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load top-up packs.",
+          500,
+        );
+      }
+
+      const grouped = new Map<string, AdminTopUpPack>();
+      for (const row of data ?? []) {
+        const version = {
+          id: row.id,
+          code: row.code,
+          version: Number(row.version),
+          nameZh: row.nameZh,
+          descriptionZh: row.descriptionZh,
+          credits: Number(row.credits),
+          currency: "USD" as const,
+          priceMinor: Number(row.priceMinor),
+          status: row.status,
+          minimumPlanCode: row.minimumPlanCode,
+          sortOrder: Number(row.sortOrder),
+          providerPrice:
+            row.providerCurrency === "CNY" && row.providerAmountMinor
+              ? {
+                  providerCode: "dulupay" as const,
+                  currency: "CNY" as const,
+                  amountMinor: Number(row.providerAmountMinor),
+                }
+              : null,
+          publishedAt: row.publishedAt,
+          retiredAt: row.retiredAt,
+          createdAt: row.createdAt,
+        };
+        const current = grouped.get(row.code) ?? {
+          code: row.code,
+          draft: null,
+          published: null,
+          retiredVersions: [],
+        };
+        if (row.status === "draft") current.draft = version;
+        else if (row.status === "published") current.published = version;
+        else current.retiredVersions.push(version);
+        grouped.set(row.code, current);
+      }
+      return [...grouped.values()];
+    },
+
+    async saveTopUpPackDraft(actorUserId, input) {
+      const { error } = await getAdmin().query(
+        `select public.admin_save_top_up_pack_draft(
+           $1::uuid, $2::text, $3::text, $4::text, $5::integer,
+           $6::integer, $7::text, $8::integer, $9::integer, $10::text
+         )`,
+        [
+          actorUserId,
+          input.code,
+          input.nameZh,
+          input.descriptionZh,
+          input.credits,
+          input.priceMinor,
+          input.minimumPlanCode,
+          input.sortOrder,
+          input.dulupayAmountMinor,
+          input.reason,
+        ],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_top_up_pack_update_failed",
+          "Unable to save the top-up pack draft.",
+          400,
+        );
+      }
+      return service.listTopUpPacks();
+    },
+
+    async publishTopUpPack(actorUserId, code, input) {
+      const { error } = await getAdmin().query(
+        "select public.admin_publish_top_up_pack($1::uuid, $2::text, $3::text)",
+        [actorUserId, code, input.reason],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_top_up_pack_publish_failed",
+          "Unable to publish the top-up pack.",
+          400,
+        );
+      }
+      return service.listTopUpPacks();
+    },
+
+    async getPaymentProviderConfig() {
+      const { data, error } = await getAdmin().query<{
+        allowedMethods: Array<"alipay" | "wxpay">;
+        apiBaseUrl: string;
+        callbackToleranceSeconds: number;
+        displayName: string;
+        enabled: boolean;
+        hasMerchantPrivateKey: boolean;
+        merchantId: string | null;
+        platformPublicKey: string | null;
+        providerCode: "dulupay";
+        updatedAt: string;
+      }>(
+        `select
+           provider_code as "providerCode",
+           display_name as "displayName",
+           enabled,
+           api_base_url as "apiBaseUrl",
+           merchant_id as "merchantId",
+           merchant_private_key_ciphertext is not null as "hasMerchantPrivateKey",
+           platform_public_key as "platformPublicKey",
+           allowed_methods as "allowedMethods",
+           callback_tolerance_seconds as "callbackToleranceSeconds",
+           updated_at as "updatedAt"
+         from public.payment_provider_configs
+         where provider_code = 'dulupay'
+         limit 1`,
+      );
+      if (error || !data?.[0]) {
+        throw new PlatformAdminServiceError(
+          "admin_query_failed",
+          "Unable to load payment provider configuration.",
+          500,
+        );
+      }
+      return {
+        ...data[0],
+        encryptionReady: options.credentialCrypto.ready,
+      };
+    },
+
+    async updatePaymentProviderConfig(actorUserId, input) {
+      if (input.merchantPrivateKey && !options.credentialCrypto.ready) {
+        throw new PlatformAdminServiceError(
+          "admin_payment_provider_update_failed",
+          "PAYMENT_CONFIG_ENCRYPTION_KEY is required before saving credentials.",
+          503,
+        );
+      }
+      let encryptedPrivateKey: string | null = null;
+      if (input.merchantPrivateKey) {
+        try {
+          createDuluPayClient({
+            apiBaseUrl: input.apiBaseUrl,
+            merchantId: input.merchantId,
+            merchantPrivateKey: input.merchantPrivateKey,
+            platformPublicKey: input.platformPublicKey,
+          });
+          encryptedPrivateKey = options.credentialCrypto.encrypt(
+            input.merchantPrivateKey,
+          );
+        } catch {
+          throw new PlatformAdminServiceError(
+            "admin_payment_provider_update_failed",
+            "The DuluPay URL or RSA keys are invalid.",
+            400,
+          );
+        }
+      }
+
+      const { error } = await getAdmin().query(
+        `select public.admin_save_payment_provider_config(
+           $1::uuid, $2::boolean, $3::text, $4::text, $5::text,
+           $6::boolean, $7::text, $8::text[], $9::integer, $10::text
+         )`,
+        [
+          actorUserId,
+          input.enabled,
+          input.apiBaseUrl,
+          input.merchantId,
+          encryptedPrivateKey,
+          Boolean(input.merchantPrivateKey),
+          input.platformPublicKey,
+          input.allowedMethods,
+          input.callbackToleranceSeconds,
+          input.reason,
+        ],
+      );
+      if (error) {
+        throw new PlatformAdminServiceError(
+          "admin_payment_provider_update_failed",
+          "Unable to save the payment provider configuration.",
+          400,
+        );
+      }
+      return service.getPaymentProviderConfig();
+    },
+
+    async testPaymentProvider() {
+      const config = await service.getPaymentProviderConfig();
+      const { data, error } = await getAdmin().query<{
+        merchantPrivateKeyCiphertext: string | null;
+      }>(
+        `select merchant_private_key_ciphertext as "merchantPrivateKeyCiphertext"
+         from public.payment_provider_configs
+         where provider_code = 'dulupay'`,
+      );
+      const ciphertext = data?.[0]?.merchantPrivateKeyCiphertext;
+      if (
+        error ||
+        !ciphertext ||
+        !config.merchantId ||
+        !config.platformPublicKey ||
+        !options.credentialCrypto.ready
+      ) {
+        throw new PlatformAdminServiceError(
+          "admin_payment_provider_test_failed",
+          "DuluPay credentials are incomplete.",
+          400,
+        );
+      }
+      try {
+        const client = createDuluPayClient({
+          apiBaseUrl: config.apiBaseUrl,
+          merchantId: config.merchantId,
+          merchantPrivateKey: options.credentialCrypto.decrypt(ciphertext),
+          platformPublicKey: config.platformPublicKey,
+        });
+        const result = await client.getMerchantInfo();
+        return {
+          merchantStatus: Number(result.status ?? 0),
+          payStatus: Number(result.pay_status ?? 0),
+        };
+      } catch {
+        throw new PlatformAdminServiceError(
+          "admin_payment_provider_test_failed",
+          "DuluPay connection test failed.",
+          502,
+        );
+      }
     },
   };
 

@@ -14,9 +14,13 @@ import {
   adminOverviewSchema,
   adminPasswordResetRequestSchema,
   adminPasswordResetResponseSchema,
+  adminPaymentProviderConfigSchema,
   adminPlatformAdminMutationRequestSchema,
   adminPlatformAdminSchema,
+  adminSaveTopUpPackDraftSchema,
+  adminTopUpPackSchema,
   adminUpdateBillingPlanDraftSchema,
+  adminUpdatePaymentProviderConfigSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
   adminUserDetailSchema,
@@ -55,6 +59,10 @@ const workspaceParamsSchema = z.object({
 
 const billingPlanParamsSchema = z.object({
   planCode: z.enum(["free", "pro", "team", "enterprise"]),
+});
+
+const topUpPackParamsSchema = z.object({
+  code: z.string().regex(/^[a-z][a-z0-9_-]{1,49}$/),
 });
 
 export async function registerAdminRoutes(
@@ -430,6 +438,102 @@ export async function registerAdminRoutes(
         return reply.code(200).send({
           plans: plans.map((plan) => adminBillingPlanSchema.parse(plan)),
         });
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
+
+  app.get("/api/admin/billing/top-up-packs", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const packs = await options.adminService.listTopUpPacks();
+      return reply.code(200).send({
+        packs: packs.map((pack) => adminTopUpPackSchema.parse(pack)),
+      });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.put("/api/admin/billing/top-up-packs/draft", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const input = adminSaveTopUpPackDraftSchema.parse(request.body);
+      const packs = await options.adminService.saveTopUpPackDraft(
+        user.id,
+        input,
+      );
+      return reply.code(200).send({
+        packs: packs.map((pack) => adminTopUpPackSchema.parse(pack)),
+      });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.post(
+    "/api/admin/billing/top-up-packs/:code/publish",
+    async (request, reply) => {
+      try {
+        const user = await requirePlatformAdmin(request, reply, options);
+        if (!user) return;
+        const params = topUpPackParamsSchema.parse(request.params);
+        const input = adminBillingPlanMutationSchema.parse(request.body);
+        const packs = await options.adminService.publishTopUpPack(
+          user.id,
+          params.code,
+          input,
+        );
+        return reply.code(200).send({
+          packs: packs.map((pack) => adminTopUpPackSchema.parse(pack)),
+        });
+      } catch (error) {
+        return sendAdminError(error, reply);
+      }
+    },
+  );
+
+  app.get("/api/admin/payments/providers/dulupay", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const config = await options.adminService.getPaymentProviderConfig();
+      return reply
+        .code(200)
+        .send({ config: adminPaymentProviderConfigSchema.parse(config) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.put("/api/admin/payments/providers/dulupay", async (request, reply) => {
+    try {
+      const user = await requirePlatformAdmin(request, reply, options);
+      if (!user) return;
+      const input = adminUpdatePaymentProviderConfigSchema.parse(request.body);
+      const config = await options.adminService.updatePaymentProviderConfig(
+        user.id,
+        input,
+      );
+      return reply
+        .code(200)
+        .send({ config: adminPaymentProviderConfigSchema.parse(config) });
+    } catch (error) {
+      return sendAdminError(error, reply);
+    }
+  });
+
+  app.post(
+    "/api/admin/payments/providers/dulupay/test",
+    async (request, reply) => {
+      try {
+        const user = await requirePlatformAdmin(request, reply, options);
+        if (!user) return;
+        const result = await options.adminService.testPaymentProvider();
+        return reply.code(200).send(result);
       } catch (error) {
         return sendAdminError(error, reply);
       }

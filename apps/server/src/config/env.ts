@@ -39,6 +39,7 @@ export type ServerEnv = {
   googleVertexVideoLocation?: string;
   openAIApiBase?: string;
   openAIApiKey?: string;
+  paymentConfigEncryptionKey?: string;
   port: number;
   postgresPoolMax?: number;
   replicateApiToken?: string;
@@ -85,6 +86,9 @@ export function loadServerEnv(
     normalizeOptionalString(source.POSTGRES_URL);
   const appJwtSecret =
     overrides.appJwtSecret ?? normalizeOptionalString(source.APP_JWT_SECRET);
+  const paymentConfigEncryptionKey =
+    overrides.paymentConfigEncryptionKey ??
+    normalizeOptionalString(source.PAYMENT_CONFIG_ENCRYPTION_KEY);
   const billingLocalSubscriptionsEnabled =
     overrides.billingLocalSubscriptionsEnabled ??
     parseOptionalBoolean(
@@ -219,6 +223,7 @@ export function loadServerEnv(
     ...(googleApplicationCredentials ? { googleApplicationCredentials } : {}),
     ...(openAIApiBase ? { openAIApiBase } : {}),
     ...(openAIApiKey ? { openAIApiKey } : {}),
+    ...(paymentConfigEncryptionKey ? { paymentConfigEncryptionKey } : {}),
     ...(postgresPoolMax ? { postgresPoolMax } : {}),
     ...(serverPublicUrl ? { serverPublicUrl } : {}),
     ...(storageRoot ? { storageRoot } : {}),
