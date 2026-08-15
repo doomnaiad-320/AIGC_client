@@ -28,6 +28,7 @@ export async function registerPaymentWebhookRoute(
 
   app.post("/api/payments/webhook", async (request, reply) => {
     const rawBody = request.body as string;
+    const receivedAt = new Date().toISOString();
 
     // ── 1. Verify webhook signature ──────────────────────────
     const signature = request.headers["x-signature"] as string | undefined;
@@ -40,7 +41,12 @@ export async function registerPaymentWebhookRoute(
       .update(rawBody)
       .digest("hex");
 
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const receivedSignature = Buffer.from(signature, "utf8");
+    const expectedSignature = Buffer.from(expected, "utf8");
+    if (
+      receivedSignature.length !== expectedSignature.length ||
+      !crypto.timingSafeEqual(receivedSignature, expectedSignature)
+    ) {
       return reply.code(401).send({ error: "Invalid webhook signature" });
     }
 
@@ -59,56 +65,83 @@ export async function registerPaymentWebhookRoute(
 
     const workspaceId = payload.meta?.custom_data?.workspace_id ?? null;
 
-    // ── 3. Log to payment_events audit table ─────────────────
-    // NOTE: payment_events table is added via migration but not yet in the
-    // generated Database type — use `as any` until types are regenerated.
+    // Lemon Squeezy's payload resource id identifies the subscription, not the
+    // delivery. Hashing the signed raw body gives retries a stable event id.
     const admin = options.getAdminClient();
-    const eventId = payload.data?.id ?? null;
-
-    const { error: insertError } = await (admin as any)
-      .from("payment_events")
-      .insert({
-        event_name: eventName,
-        lemon_squeezy_event_id: eventId,
-        workspace_id: workspaceId,
-        payload: payload as unknown as Record<string, unknown>,
-        processed: false,
+    const providerEventId = crypto
+      .createHash("sha256")
+      .update(rawBody)
+      .digest("hex");
+    const { data: claimRows, error: claimError } = await admin.query<{
+      result: {
+        attemptCount: number;
+        claimed: boolean;
+        eventId: string;
+        status: "failed" | "processed" | "processing";
+      };
+    }>(
+      `select public.payment_claim_webhook_event(
+         $1::text, $2::text, $3::text, $4::text, $5::uuid, $6::jsonb
+       ) as result`,
+      [
+        "lemon_squeezy",
+        providerEventId,
+        eventName,
+        payload.data?.id ?? null,
+        workspaceId,
+        JSON.stringify(payload),
+      ],
+    );
+    const claim = claimRows?.[0]?.result;
+    if (claimError || !claim) {
+      request.log.error(
+        { error: claimError?.message, providerEventId },
+        "Failed to claim payment webhook",
+      );
+      return reply.code(503).send({ error: "Webhook processing unavailable" });
+    }
+    if (!claim.claimed) {
+      return reply.code(200).send({
+        duplicate: true,
+        received: true,
+        status: claim.status,
       });
-
-    if (insertError) {
-      console.error("[Webhook] Failed to log payment event:", (insertError as any).message);
-      // Continue processing even if audit logging fails
     }
 
-    // ── 4. Process event ─────────────────────────────────────
+    // Subscription projection, credit grant and processed state commit in one
+    // PostgreSQL transaction inside the payment service RPC.
     try {
-      await options.paymentService.handleWebhookEvent(eventName, payload);
-
-      // Mark as processed
-      if (eventId) {
-        await (admin as any)
-          .from("payment_events")
-          .update({ processed: true })
-          .eq("lemon_squeezy_event_id", eventId);
-      }
+      await options.paymentService.handleWebhookEvent(eventName, payload, {
+        providerEventId,
+        receivedAt,
+      });
     } catch (processingError) {
       const errorMessage =
         processingError instanceof Error
           ? processingError.message
           : "Unknown error";
 
-      console.error(`[Webhook] Error processing ${eventName}:`, errorMessage);
-
-      // Record error in audit trail
-      if (eventId) {
-        await (admin as any)
-          .from("payment_events")
-          .update({ error_message: errorMessage })
-          .eq("lemon_squeezy_event_id", eventId);
+      request.log.error(
+        { error: errorMessage, eventName, providerEventId },
+        "Payment webhook processing failed",
+      );
+      const { error: failError } = await admin.query(
+        `select public.payment_fail_webhook_event(
+           $1::text, $2::text, $3::text
+         ) as result`,
+        ["lemon_squeezy", providerEventId, errorMessage],
+      );
+      if (failError) {
+        request.log.error(
+          { error: failError.message, providerEventId },
+          "Failed to mark payment webhook as failed",
+        );
       }
 
-      // Still return 200 to prevent Lemon Squeezy from retrying endlessly.
-      // The error is logged for manual investigation.
+      return reply.code(503).send({
+        error: "Webhook processing failed",
+        retryable: true,
+      });
     }
 
     return reply.code(200).send({ received: true });

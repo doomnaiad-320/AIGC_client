@@ -16,6 +16,7 @@
     "test:atomic-admission": "node scripts/test-atomic-generation-admission.mjs",
     "test:billing-ledger": "node scripts/test-billing-ledger-local.mjs",
     "test:local-subscription": "node scripts/test-local-subscription-lifecycle.mjs",
+    "test:payment-webhook": "node scripts/test-payment-webhook-ledger.mjs",
     "test:workspace": "node --test tests/workspace.test.mjs",
     "test:packages": "turbo run test",
     "test": "pnpm run test:workspace && pnpm run test:packages",
