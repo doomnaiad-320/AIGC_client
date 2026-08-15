@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { TopUpPacksSection } from "@/components/top-up-packs-section";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -123,6 +124,8 @@ export function BillingSection() {
           onResume={handleResume}
         />
       )}
+
+      <TopUpPacksSection currentPlan={subscription?.plan ?? "free"} />
 
       <Dialog
         open={cancelConfirmOpen}
@@ -277,7 +280,11 @@ function SubscriptionPanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button render={<Link href="/pricing" />} size="lg">
+        <Button
+          render={<Link href="/pricing" />}
+          nativeButton={false}
+          size="lg"
+        >
           <CreditCard />
           {isFree ? "选择套餐" : "更换套餐"}
         </Button>
@@ -286,11 +293,15 @@ function SubscriptionPanel({
           <Button
             render={
               <a
+                aria-label="管理付款方式"
                 href={subscription.customerPortalUrl}
                 rel="noopener noreferrer"
                 target="_blank"
-              />
+              >
+                <span className="sr-only">管理付款方式</span>
+              </a>
             }
+            nativeButton={false}
             size="lg"
             variant="outline"
           >
@@ -374,7 +385,7 @@ function statusLabel(status: string | null) {
 
 function providerLabel(provider: string | null) {
   if (provider === "local") return "本地模拟";
-  if (provider === "lemon_squeezy") return "Lemon Squeezy";
+  if (provider === "lemon_squeezy") return "历史支付渠道";
   return "平台套餐";
 }
 

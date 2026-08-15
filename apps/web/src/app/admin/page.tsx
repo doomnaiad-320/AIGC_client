@@ -29,7 +29,9 @@ import {
   Database,
   Eye,
   KeyRound,
+  Landmark,
   Loader2,
+  PackageOpen,
   PauseCircle,
   Pencil,
   RefreshCw,
@@ -86,6 +88,8 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { BillingPlansPanel } from "./billing-plans-panel";
+import { PaymentProvidersPanel } from "./payment-providers-panel";
+import { TopUpPacksPanel } from "./top-up-packs-panel";
 
 type AdminTab =
   | "users"
@@ -94,6 +98,8 @@ type AdminTab =
   | "agent-runs"
   | "ledger"
   | "billing"
+  | "top-up-packs"
+  | "payment-providers"
   | "audit"
   | "platform-admins";
 
@@ -138,6 +144,18 @@ const tabs: Array<{
     label: "套餐与计费",
     description: "设置套餐价格、点数、并发与版本化权益。",
     icon: CreditCard,
+  },
+  {
+    id: "top-up-packs",
+    label: "点数包",
+    description: "配置点数、USD 标价、DuluPay 实收价和可购买套餐。",
+    icon: PackageOpen,
+  },
+  {
+    id: "payment-providers",
+    label: "支付配置",
+    description: "管理 DuluPay 商户、RSA 密钥、支付方式和回调安全。",
+    icon: Landmark,
   },
   {
     id: "audit",
@@ -753,6 +771,12 @@ export default function AdminPage() {
             )}
             {tab === "billing" && session?.access_token && (
               <BillingPlansPanel accessToken={session.access_token} />
+            )}
+            {tab === "top-up-packs" && session?.access_token && (
+              <TopUpPacksPanel accessToken={session.access_token} />
+            )}
+            {tab === "payment-providers" && session?.access_token && (
+              <PaymentProvidersPanel accessToken={session.access_token} />
             )}
             {tab === "audit" && (
               <AuditTable events={events} loading={loadingData} />

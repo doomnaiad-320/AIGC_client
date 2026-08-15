@@ -60,6 +60,12 @@ export function useCredits(): UseCreditsReturn {
     return () => document.removeEventListener("visibilitychange", handler);
   }, [refresh]);
 
+  useEffect(() => {
+    const handler = () => void refresh();
+    window.addEventListener("loomic:credits-changed", handler);
+    return () => window.removeEventListener("loomic:credits-changed", handler);
+  }, [refresh]);
+
   const claimDaily = useCallback(async (): Promise<boolean> => {
     const token = accessTokenRef.current;
     if (!token) return false;

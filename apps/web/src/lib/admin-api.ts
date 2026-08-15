@@ -11,9 +11,13 @@ import type {
   AdminOverview,
   AdminPasswordResetRequest,
   AdminPasswordResetResponse,
+  AdminPaymentProviderConfig,
   AdminPlatformAdmin,
   AdminPlatformAdminMutationRequest,
+  AdminSaveTopUpPackDraft,
+  AdminTopUpPack,
   AdminUpdateBillingPlanDraft,
+  AdminUpdatePaymentProviderConfig,
   AdminUpdateUserRequest,
   AdminUpdateUserStatusRequest,
   AdminUser,
@@ -44,6 +48,10 @@ const ADMIN_ERROR_MESSAGES: Record<string, string> = {
   admin_billing_plan_draft_exists: "该套餐已经存在草稿，请直接编辑。",
   admin_billing_plan_update_failed: "无法保存套餐草稿。",
   admin_billing_plan_publish_failed: "无法发布套餐版本。",
+  admin_top_up_pack_update_failed: "无法保存点数包草稿。",
+  admin_top_up_pack_publish_failed: "无法发布点数包。",
+  admin_payment_provider_update_failed: "无法保存支付配置。",
+  admin_payment_provider_test_failed: "支付渠道连接测试失败。",
   admin_request_failed: "管理后台请求失败，请稍后重试。",
 };
 
@@ -286,5 +294,65 @@ export function publishAdminBillingPlan(
     `/api/admin/billing/plans/${planCode}/publish`,
     "POST",
     input,
+  );
+}
+
+export function fetchAdminTopUpPacks(accessToken: string) {
+  return get<{ packs: AdminTopUpPack[] }>(
+    accessToken,
+    "/api/admin/billing/top-up-packs",
+  );
+}
+
+export function saveAdminTopUpPackDraft(
+  accessToken: string,
+  input: AdminSaveTopUpPackDraft,
+) {
+  return mutate<{ packs: AdminTopUpPack[] }>(
+    accessToken,
+    "/api/admin/billing/top-up-packs/draft",
+    "PUT",
+    input,
+  );
+}
+
+export function publishAdminTopUpPack(
+  accessToken: string,
+  code: string,
+  input: AdminBillingPlanMutation,
+) {
+  return mutate<{ packs: AdminTopUpPack[] }>(
+    accessToken,
+    `/api/admin/billing/top-up-packs/${code}/publish`,
+    "POST",
+    input,
+  );
+}
+
+export function fetchAdminPaymentProvider(accessToken: string) {
+  return get<{ config: AdminPaymentProviderConfig }>(
+    accessToken,
+    "/api/admin/payments/providers/dulupay",
+  );
+}
+
+export function updateAdminPaymentProvider(
+  accessToken: string,
+  input: AdminUpdatePaymentProviderConfig,
+) {
+  return mutate<{ config: AdminPaymentProviderConfig }>(
+    accessToken,
+    "/api/admin/payments/providers/dulupay",
+    "PUT",
+    input,
+  );
+}
+
+export function testAdminPaymentProvider(accessToken: string) {
+  return mutate<{ merchantStatus: number; payStatus: number }>(
+    accessToken,
+    "/api/admin/payments/providers/dulupay/test",
+    "POST",
+    {},
   );
 }
