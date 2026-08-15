@@ -9,11 +9,11 @@ import {
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
 
-import {
-  ProjectServiceError,
-  type ProjectService,
-} from "../features/projects/project-service.js";
 import type { RequestAuthenticator } from "../auth/user.js";
+import {
+  type ProjectService,
+  ProjectServiceError,
+} from "../features/projects/project-service.js";
 
 export async function registerProjectRoutes(
   app: FastifyInstance,
@@ -61,7 +61,9 @@ export async function registerProjectRoutes(
       }
 
       const projects = await options.projectService.listProjects(user);
-      return reply.code(200).send(projectListResponseSchema.parse({ projects }));
+      return reply
+        .code(200)
+        .send(projectListResponseSchema.parse({ projects }));
     } catch (error) {
       return sendProjectError(error, reply, "project_query_failed");
     }

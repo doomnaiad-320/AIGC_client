@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { KeyRound } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -73,7 +73,10 @@ export function ProfileSection({
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordFeedback({ type: "error", message: "Passwords do not match." });
+      setPasswordFeedback({
+        type: "error",
+        message: "Passwords do not match.",
+      });
       return;
     }
     if (newPassword === currentPassword) {
@@ -123,7 +126,9 @@ export function ProfileSection({
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input id="email" value={email} disabled className="opacity-60" />
-          <p className="text-xs text-muted-foreground">Email is your login ID and cannot be changed here.</p>
+          <p className="text-xs text-muted-foreground">
+            Email is your login ID and cannot be changed here.
+          </p>
         </div>
 
         {feedback && (

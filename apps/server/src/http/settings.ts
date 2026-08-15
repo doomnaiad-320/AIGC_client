@@ -7,12 +7,12 @@ import {
   workspaceSettingsUpdateRequestSchema,
 } from "@loomic/shared";
 
+import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import {
-  SettingsServiceError,
   type SettingsService,
+  SettingsServiceError,
 } from "../features/settings/settings-service.js";
-import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerSettingsRoutes(
   app: FastifyInstance,

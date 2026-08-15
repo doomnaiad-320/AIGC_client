@@ -1,34 +1,34 @@
 import type {
-  RunCreateRequest,
-  RunCreateResponse,
-  ViewerResponse,
-  ProjectListResponse,
+  AssetSignedUrlResponse,
+  CanvasDetail,
+  ChatMessageCreateRequest,
+  JobResponse,
+  MarketplaceDetail,
+  MarketplaceSearchResponse,
+  MessageCreateResponse,
+  MessageListResponse,
+  ModelListResponse,
+  ProfileUpdateResponse,
   ProjectCreateRequest,
   ProjectCreateResponse,
+  ProjectListResponse,
   ProjectUpdateRequest,
-  CanvasDetail,
-  ProfileUpdateResponse,
-  WorkspaceSettingsResponse,
-  ModelListResponse,
-  SessionListResponse,
+  RunCreateRequest,
+  RunCreateResponse,
   SessionCreateResponse,
-  MessageListResponse,
-  MessageCreateResponse,
-  ChatMessageCreateRequest,
-  UploadResponse,
-  AssetSignedUrlResponse,
-  SkillListResponse,
-  SkillDetailResponse,
+  SessionListResponse,
   SkillCreateRequest,
+  SkillDetailResponse,
+  SkillListResponse,
   SkillUpdateRequest,
+  UploadResponse,
+  ViewerResponse,
+  WorkspaceSettingsResponse,
   WorkspaceSkillListResponse,
-  JobResponse,
-  MarketplaceSearchResponse,
-  MarketplaceDetail,
 } from "@loomic/shared";
 
-import { getServerBaseUrl } from "./env";
 import { dedupeRequest } from "./dedupe-request";
+import { getServerBaseUrl } from "./env";
 
 // --- Error types ---
 
@@ -185,13 +185,17 @@ export async function deleteProject(
 export async function fetchProject(
   accessToken: string,
   projectId: string,
-): Promise<{ project: { id: string; name: string; brand_kit_id: string | null } }> {
+): Promise<{
+  project: { id: string; name: string; brand_kit_id: string | null };
+}> {
   const response = await fetch(
     `${getServerBaseUrl()}/api/projects/${projectId}`,
     { headers: authHeaders(accessToken) },
   );
   if (!response.ok) return handleErrorResponse(response);
-  return (await response.json()) as { project: { id: string; name: string; brand_kit_id: string | null } };
+  return (await response.json()) as {
+    project: { id: string; name: string; brand_kit_id: string | null };
+  };
 }
 
 export async function updateProject(
@@ -227,7 +231,11 @@ export async function fetchCanvas(
 export async function saveCanvas(
   accessToken: string,
   canvasId: string,
-  content: { elements: Record<string, unknown>[]; appState: Record<string, unknown>; files: Record<string, Record<string, unknown>> },
+  content: {
+    elements: Record<string, unknown>[];
+    appState: Record<string, unknown>;
+    files: Record<string, Record<string, unknown>>;
+  },
 ): Promise<void> {
   const response = await fetch(
     `${getServerBaseUrl()}/api/canvases/${canvasId}`,
@@ -288,10 +296,9 @@ export async function changePassword(
 export async function fetchWorkspaceSettings(
   accessToken: string,
 ): Promise<WorkspaceSettingsResponse> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/workspace/settings`,
-    { headers: authHeaders(accessToken) },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/workspace/settings`, {
+    headers: authHeaders(accessToken),
+  });
   if (!response.ok) return handleErrorResponse(response);
   return (await response.json()) as WorkspaceSettingsResponse;
 }
@@ -300,14 +307,11 @@ export async function updateWorkspaceSettings(
   accessToken: string,
   data: { defaultModel: string },
 ): Promise<WorkspaceSettingsResponse> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/workspace/settings`,
-    {
-      method: "PUT",
-      headers: authJsonHeaders(accessToken),
-      body: JSON.stringify(data),
-    },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/workspace/settings`, {
+    method: "PUT",
+    headers: authJsonHeaders(accessToken),
+    body: JSON.stringify(data),
+  });
   if (!response.ok) return handleErrorResponse(response);
   return (await response.json()) as WorkspaceSettingsResponse;
 }
@@ -450,13 +454,10 @@ export async function deleteAsset(
   accessToken: string,
   assetId: string,
 ): Promise<void> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/uploads/${assetId}`,
-    {
-      method: "DELETE",
-      headers: authHeaders(accessToken),
-    },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/uploads/${assetId}`, {
+    method: "DELETE",
+    headers: authHeaders(accessToken),
+  });
   if (!response.ok) return handleErrorResponse(response);
 }
 
@@ -580,7 +581,9 @@ export async function generateVideoDirect(
         ...(options?.duration != null ? { duration: options.duration } : {}),
         ...(options?.resolution ? { resolution: options.resolution } : {}),
         ...(options?.aspectRatio ? { aspectRatio: options.aspectRatio } : {}),
-        ...(options?.inputImages?.length ? { inputImages: options.inputImages } : {}),
+        ...(options?.inputImages?.length
+          ? { inputImages: options.inputImages }
+          : {}),
       }),
     },
   );
@@ -594,10 +597,9 @@ export async function fetchJob(
   accessToken: string,
   jobId: string,
 ): Promise<JobResponse> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/jobs/${jobId}`,
-    { headers: authHeaders(accessToken) },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/jobs/${jobId}`, {
+    headers: authHeaders(accessToken),
+  });
   if (!response.ok) return handleErrorResponse(response);
   return (await response.json()) as JobResponse;
 }
@@ -666,7 +668,16 @@ export async function deleteSkill(
 export async function fetchSkillFiles(
   accessToken: string,
   skillId: string,
-): Promise<{ files: Array<{ id: string; filePath: string; content: string; mimeType: string; createdAt: string; updatedAt: string }> }> {
+): Promise<{
+  files: Array<{
+    id: string;
+    filePath: string;
+    content: string;
+    mimeType: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}> {
   const response = await fetch(
     `${getServerBaseUrl()}/api/skills/${skillId}/files`,
     { headers: authHeaders(accessToken) },
@@ -680,10 +691,9 @@ export async function fetchSkillFiles(
 export async function fetchWorkspaceSkills(
   accessToken: string,
 ): Promise<WorkspaceSkillListResponse> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/workspaces/skills`,
-    { headers: authHeaders(accessToken) },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/workspaces/skills`, {
+    headers: authHeaders(accessToken),
+  });
   if (!response.ok) return handleErrorResponse(response);
   return (await response.json()) as WorkspaceSkillListResponse;
 }
@@ -692,14 +702,11 @@ export async function installSkill(
   accessToken: string,
   skillId: string,
 ): Promise<void> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/workspaces/skills`,
-    {
-      method: "POST",
-      headers: authJsonHeaders(accessToken),
-      body: JSON.stringify({ skillId }),
-    },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/workspaces/skills`, {
+    method: "POST",
+    headers: authJsonHeaders(accessToken),
+    body: JSON.stringify({ skillId }),
+  });
   if (!response.ok) return handleErrorResponse(response);
 }
 
@@ -738,8 +745,8 @@ export async function toggleSkill(
 export async function searchMarketplace(
   accessToken: string,
   query: string,
-  page: number = 1,
-  limit: number = 20,
+  page = 1,
+  limit = 20,
 ): Promise<MarketplaceSearchResponse> {
   const params = new URLSearchParams({
     q: query,
@@ -787,14 +794,11 @@ export async function importSkillFromUrl(
   accessToken: string,
   url: string,
 ): Promise<SkillDetailResponse> {
-  const response = await fetch(
-    `${getServerBaseUrl()}/api/skills/import`,
-    {
-      method: "POST",
-      headers: authJsonHeaders(accessToken),
-      body: JSON.stringify({ url }),
-    },
-  );
+  const response = await fetch(`${getServerBaseUrl()}/api/skills/import`, {
+    method: "POST",
+    headers: authJsonHeaders(accessToken),
+    body: JSON.stringify({ url }),
+  });
   if (!response.ok) return handleErrorResponse(response);
   return (await response.json()) as SkillDetailResponse;
 }

@@ -5,8 +5,7 @@
 
 const PROVIDER_PATTERN =
   /google|vertex|openai|replicate|langchain|gaxios|undici|fetch failed/i;
-const DB_PATTERN =
-  /postgres|pgmq|database|relation|column|constraint/i;
+const DB_PATTERN = /postgres|pgmq|database|relation|column|constraint/i;
 const AUTH_PATTERN =
   /jwt|token|unauthorized|forbidden|credential|service.account/i;
 const INFRA_PATTERN =
@@ -27,11 +26,22 @@ export function sanitizeErrorForClient(error: unknown): string {
     // Log response details if present (Google API errors attach response/details)
     const errAny = error as any;
     if (errAny.response) {
-      console.error("[error-sanitizer] Response status:", errAny.response.status);
-      console.error("[error-sanitizer] Response data:", JSON.stringify(errAny.response.data ?? errAny.response.body ?? "").substring(0, 2000));
+      console.error(
+        "[error-sanitizer] Response status:",
+        errAny.response.status,
+      );
+      console.error(
+        "[error-sanitizer] Response data:",
+        JSON.stringify(
+          errAny.response.data ?? errAny.response.body ?? "",
+        ).substring(0, 2000),
+      );
     }
     if (errAny.details) {
-      console.error("[error-sanitizer] Details:", JSON.stringify(errAny.details).substring(0, 2000));
+      console.error(
+        "[error-sanitizer] Details:",
+        JSON.stringify(errAny.details).substring(0, 2000),
+      );
     }
     if (error.stack) {
       console.error("[error-sanitizer] Stack:", error.stack);

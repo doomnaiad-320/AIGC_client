@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AdminDbClient } from "../../db/client.js";
 import { createLocalSubscriptionService } from "./local-subscription-service.js";
-import { PaymentServiceError } from "./payment-service.js";
+import type { PaymentServiceError } from "./payment-service.js";
 
 const workspaceId = "22222222-2222-4222-8222-222222222222";
 const actorUserId = "11111111-1111-4111-8111-111111111111";
@@ -15,9 +15,10 @@ function makeAdminClient(
 
 describe("local subscription service", () => {
   it("activates paid plans through the PostgreSQL lifecycle function", async () => {
-    const query = vi
-      .fn()
-      .mockResolvedValue({ data: [{ result: { action: "activated" } }], error: null });
+    const query = vi.fn().mockResolvedValue({
+      data: [{ result: { action: "activated" } }],
+      error: null,
+    });
     const service = createLocalSubscriptionService({
       getAdminClient: () => makeAdminClient(query),
       webOrigin: "http://localhost:3000",
@@ -69,7 +70,10 @@ describe("local subscription service", () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({ data: [{ result: status }], error: null })
-      .mockResolvedValue({ data: [{ result: { success: true } }], error: null });
+      .mockResolvedValue({
+        data: [{ result: { success: true } }],
+        error: null,
+      });
     const service = createLocalSubscriptionService({
       getAdminClient: () => makeAdminClient(query),
       webOrigin: "http://localhost:3000",

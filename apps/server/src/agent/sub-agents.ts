@@ -1,8 +1,8 @@
 import type { SubAgent } from "deepagents";
 
 import {
-  createVideoGenerateTool,
   type SubmitVideoJobFn,
+  createVideoGenerateTool,
 } from "./tools/video-generate.js";
 
 export function createVideoSubAgent(deps?: {
@@ -17,7 +17,9 @@ export function createVideoSubAgent(deps?: {
 If video generation is not available or fails, clearly explain the limitation.`,
     tools: [
       createVideoGenerateTool(
-        deps?.submitVideoJob ? { submitVideoJob: deps.submitVideoJob } : undefined,
+        deps?.submitVideoJob
+          ? { submitVideoJob: deps.submitVideoJob }
+          : undefined,
       ),
     ],
   };

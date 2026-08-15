@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
-const baseUrl = (process.env.LOOMIC_SMOKE_BASE_URL ?? "http://127.0.0.1:3001").replace(
-  /\/$/,
-  "",
-);
+const baseUrl = (
+  process.env.LOOMIC_SMOKE_BASE_URL ?? "http://127.0.0.1:3001"
+).replace(/\/$/, "");
 const startedAt = Date.now();
 const email = `smoke-${startedAt}@test.loomic.local`;
 const password = "local-smoke-password";
@@ -63,12 +62,16 @@ async function main() {
 
   const listed = await request("/api/projects", { headers: authHeaders });
   if (!listed.body?.projects?.some((item) => item.id === project.id)) {
-    throw new Error("The new project was not returned by the project list API.");
+    throw new Error(
+      "The new project was not returned by the project list API.",
+    );
   }
 
   const createdAt = Date.parse(project.createdAt);
   if (!Number.isFinite(createdAt) || Math.abs(createdAt - startedAt) > 60_000) {
-    throw new Error("The project timestamp is invalid or affected by session timezone drift.");
+    throw new Error(
+      "The project timestamp is invalid or affected by session timezone drift.",
+    );
   }
 
   const canvasPath = `/api/canvases/${project.primaryCanvas.id}`;
@@ -110,15 +113,23 @@ async function main() {
 
   const storageUrl = content?.files?.[fileId]?.storageUrl;
   if (!storageUrl) {
-    throw new Error("The canvas file was not extracted to local asset storage.");
+    throw new Error(
+      "The canvas file was not extracted to local asset storage.",
+    );
   }
   const storedAsset = await fetch(storageUrl);
-  if (!storedAsset.ok || storedAsset.headers.get("content-type") !== "image/png") {
+  if (
+    !storedAsset.ok ||
+    storedAsset.headers.get("content-type") !== "image/png"
+  ) {
     throw new Error("The locally stored canvas asset could not be loaded.");
   }
 
   const passwordChange = await request("/api/auth/password", {
-    body: JSON.stringify({ currentPassword: password, newPassword: updatedPassword }),
+    body: JSON.stringify({
+      currentPassword: password,
+      newPassword: updatedPassword,
+    }),
     headers: authHeaders,
     method: "POST",
   });
@@ -132,7 +143,9 @@ async function main() {
     method: "POST",
   });
   if (oldLogin.status !== 401) {
-    throw new Error("The old password remained valid after the password update.");
+    throw new Error(
+      "The old password remained valid after the password update.",
+    );
   }
 
   const newLogin = await request("/api/auth/login", {

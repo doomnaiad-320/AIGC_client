@@ -1,16 +1,16 @@
 // @credits-system — React hook for subscription status, cancellation, and plan changes
 "use client";
 
-import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
-  getSubscription,
+  type SubscriptionStatus,
   cancelSubscription as apiCancelSubscription,
   changePlan as apiChangePlan,
   resumeSubscription as apiResumeSubscription,
-  type SubscriptionStatus,
+  getSubscription,
 } from "@/lib/payments-api";
+import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseSubscriptionReturn {
   subscription: SubscriptionStatus | null;

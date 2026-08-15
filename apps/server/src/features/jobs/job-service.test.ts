@@ -4,7 +4,8 @@ import type { AuthenticatedUser } from "../../auth/user.js";
 import { JobServiceError, createJobService } from "./job-service.js";
 
 const user: AuthenticatedUser = {
-  accessToken: "header.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEifQ.signature",
+  accessToken:
+    "header.eyJzdWIiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEifQ.signature",
   authVersion: 0,
   email: "test@example.com",
   id: "11111111-1111-4111-8111-111111111111",
@@ -52,32 +53,35 @@ describe("JobService atomic admission", () => {
   it.each([
     { claimed: true, row: { id: "33333333-3333-4333-8333-333333333333" } },
     { claimed: false, row: null },
-  ])("returns $claimed when the queued job claim resolves", async ({ claimed, row }) => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
-    const query = {
-      eq: vi.fn(),
-      maybeSingle,
-      select: vi.fn(),
-      update: vi.fn(),
-    };
-    query.update.mockReturnValue(query);
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const service = createJobService({
-      createUserClient: vi.fn() as any,
-      getAdminClient: vi.fn(() => ({
-        from: vi.fn(() => query),
-      })) as any,
-    });
+  ])(
+    "returns $claimed when the queued job claim resolves",
+    async ({ claimed, row }) => {
+      const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+      const query = {
+        eq: vi.fn(),
+        maybeSingle,
+        select: vi.fn(),
+        update: vi.fn(),
+      };
+      query.update.mockReturnValue(query);
+      query.eq.mockReturnValue(query);
+      query.select.mockReturnValue(query);
+      const service = createJobService({
+        createUserClient: vi.fn() as any,
+        getAdminClient: vi.fn(() => ({
+          from: vi.fn(() => query),
+        })) as any,
+      });
 
-    await expect(
-      service.markRunning("33333333-3333-4333-8333-333333333333"),
-    ).resolves.toBe(claimed);
-    expect(query.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "running" }),
-    );
-    expect(query.eq).toHaveBeenCalledWith("status", "queued");
-  });
+      await expect(
+        service.markRunning("33333333-3333-4333-8333-333333333333"),
+      ).resolves.toBe(claimed);
+      expect(query.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "running" }),
+      );
+      expect(query.eq).toHaveBeenCalledWith("status", "queued");
+    },
+  );
 
   it("refreshes a private result URL when a completed job is read", async () => {
     const row = {

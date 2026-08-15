@@ -1,4 +1,7 @@
-import type { BaseCheckpointSaver, BaseStore } from "@langchain/langgraph-checkpoint";
+import type {
+  BaseCheckpointSaver,
+  BaseStore,
+} from "@langchain/langgraph-checkpoint";
 
 import type { ServerEnv } from "../../config/env.js";
 import { getDatabaseUrl } from "../../db/postgres.js";

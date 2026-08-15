@@ -1,26 +1,26 @@
 "use client";
 
+import {
+  type ImageQualityLevel,
+  getImageCreditCost,
+  isImageQualityAtMost,
+} from "@loomic/shared";
 import { ImageUp, Lock, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  getImageCreditCost,
-  isImageQualityAtMost,
-  type ImageQualityLevel,
-} from "@loomic/shared";
 
-import type { ImageModelInfo } from "../../lib/server-api";
-import { fetchImageModels, generateImageDirect } from "../../lib/server-api";
 import { useGenerationErrorHandler } from "../../hooks/use-generation-error-handler";
-import {
-  updateImageGeneratorElement,
-  resizeImageGeneratorElement,
-  type ImageGeneratorData,
-} from "../../lib/canvas-image-generator";
 import {
   createExcalidrawImageElement,
   fetchAsDataURL,
 } from "../../lib/canvas-elements";
+import {
+  type ImageGeneratorData,
+  resizeImageGeneratorElement,
+  updateImageGeneratorElement,
+} from "../../lib/canvas-image-generator";
+import type { ImageModelInfo } from "../../lib/server-api";
+import { fetchImageModels, generateImageDirect } from "../../lib/server-api";
 
 type ImageGeneratorPanelProps = {
   elementId: string;
@@ -77,7 +77,9 @@ export function ImageGeneratorPanel({
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showRatioDropdown, setShowRatioDropdown] = useState(false);
   const [showQualityDropdown, setShowQualityDropdown] = useState(false);
-  const [refImages, setRefImages] = useState<Array<{ id: string; dataUrl: string; file: File }>>([]);
+  const [refImages, setRefImages] = useState<
+    Array<{ id: string; dataUrl: string; file: File }>
+  >([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const refInputRef = useRef<HTMLInputElement>(null);
@@ -97,7 +99,9 @@ export function ImageGeneratorPanel({
       .catch((err) => {
         console.warn("[image-gen] Failed to fetch models:", err);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Close dropdowns when clicking outside the panel
@@ -131,17 +135,13 @@ export function ImageGeneratorPanel({
   // Calculate panel screen position from canvas coordinates
   const { scrollX, scrollY, zoom } = canvasScrollZoom;
   const screenX = (elementBounds.x + scrollX) * zoom;
-  const screenY =
-    (elementBounds.y + elementBounds.height + scrollY) * zoom + 8;
+  const screenY = (elementBounds.y + elementBounds.height + scrollY) * zoom + 8;
 
   const currentModel = models.find((m) => m.id === model);
   const planMaxQuality = currentModel?.maxAllowedQuality ?? "standard";
   const modelMaxQuality = currentModel?.maxImageQuality ?? "ultra";
   const maxSelectableQuality = lowerQuality(planMaxQuality, modelMaxQuality);
-  const qualityAllowed = isImageQualityAtMost(
-    quality,
-    maxSelectableQuality,
-  );
+  const qualityAllowed = isImageQualityAtMost(quality, maxSelectableQuality);
   const currentCreditCost = getImageCreditCost(model, quality);
 
   useEffect(() => {
@@ -263,12 +263,10 @@ export function ImageGeneratorPanel({
       });
 
       // Replace: delete placeholder, add image
-      const elements = excalidrawApi
-        .getSceneElements()
-        .map((el: any) => {
-          if (el.id === elementId) return { ...el, isDeleted: true };
-          return el;
-        });
+      const elements = excalidrawApi.getSceneElements().map((el: any) => {
+        if (el.id === elementId) return { ...el, isDeleted: true };
+        return el;
+      });
       excalidrawApi.updateScene({
         elements: [...elements, imageElement],
         captureUpdate: "IMMEDIATELY",
@@ -424,7 +422,11 @@ export function ImageGeneratorPanel({
                 reader.onload = () => {
                   setRefImages((prev) => [
                     ...prev,
-                    { id: generateId(), dataUrl: reader.result as string, file },
+                    {
+                      id: generateId(),
+                      dataUrl: reader.result as string,
+                      file,
+                    },
                   ]);
                 };
                 reader.readAsDataURL(file);
@@ -436,7 +438,9 @@ export function ImageGeneratorPanel({
             type="button"
             onClick={() => refInputRef.current?.click()}
             className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted ${
-              refImages.length > 0 ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              refImages.length > 0
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
             title="Add reference image"
           >
@@ -454,7 +458,11 @@ export function ImageGeneratorPanel({
                   />
                   <button
                     type="button"
-                    onClick={() => setRefImages((prev) => prev.filter((r) => r.id !== img.id))}
+                    onClick={() =>
+                      setRefImages((prev) =>
+                        prev.filter((r) => r.id !== img.id),
+                      )
+                    }
                     className="absolute -top-1 -right-1 hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[8px]"
                   >
                     x

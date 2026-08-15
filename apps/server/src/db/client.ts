@@ -1,10 +1,10 @@
 import type pg from "pg";
 
 import type { ServerEnv } from "../config/env.js";
-import { createPostgresPool, type PostgresPool } from "./postgres.js";
+import { type PostgresPool, createPostgresPool } from "./postgres.js";
 import {
-  createLocalStorageClient,
   type LocalStorageClient,
+  createLocalStorageClient,
 } from "./storage.js";
 
 export type DbError = {
@@ -58,29 +58,28 @@ type SelectOptions = {
   head?: boolean;
 };
 
-export type DbQueryBuilder<T = any> =
-  PromiseLike<DbResult<T[] | T>> & {
-    select(columns?: string, options?: SelectOptions): DbQueryBuilder<T>;
-    insert(
-      values: Record<string, unknown> | Record<string, unknown>[],
-    ): DbQueryBuilder<T>;
-    update(values: Record<string, unknown>): DbQueryBuilder<T>;
-    upsert(
-      values: Record<string, unknown> | Record<string, unknown>[],
-      options?: { onConflict?: string },
-    ): DbQueryBuilder<T>;
-    delete(options?: { count?: "exact" }): DbQueryBuilder<T>;
-    eq(column: string, value: unknown): DbQueryBuilder<T>;
-    neq(column: string, value: unknown): DbQueryBuilder<T>;
-    is(column: string, value: unknown): DbQueryBuilder<T>;
-    in(column: string, values: unknown[]): DbQueryBuilder<T>;
-    not(column: string, operator: "is", value: unknown): DbQueryBuilder<T>;
-    order(column: string, options?: { ascending?: boolean }): DbQueryBuilder<T>;
-    limit(count: number): DbQueryBuilder<T>;
-    range(from: number, to: number): DbQueryBuilder<T>;
-    single(): Promise<DbResult<T>>;
-    maybeSingle(): Promise<DbResult<T | null>>;
-  };
+export type DbQueryBuilder<T = any> = PromiseLike<DbResult<T[] | T>> & {
+  select(columns?: string, options?: SelectOptions): DbQueryBuilder<T>;
+  insert(
+    values: Record<string, unknown> | Record<string, unknown>[],
+  ): DbQueryBuilder<T>;
+  update(values: Record<string, unknown>): DbQueryBuilder<T>;
+  upsert(
+    values: Record<string, unknown> | Record<string, unknown>[],
+    options?: { onConflict?: string },
+  ): DbQueryBuilder<T>;
+  delete(options?: { count?: "exact" }): DbQueryBuilder<T>;
+  eq(column: string, value: unknown): DbQueryBuilder<T>;
+  neq(column: string, value: unknown): DbQueryBuilder<T>;
+  is(column: string, value: unknown): DbQueryBuilder<T>;
+  in(column: string, values: unknown[]): DbQueryBuilder<T>;
+  not(column: string, operator: "is", value: unknown): DbQueryBuilder<T>;
+  order(column: string, options?: { ascending?: boolean }): DbQueryBuilder<T>;
+  limit(count: number): DbQueryBuilder<T>;
+  range(from: number, to: number): DbQueryBuilder<T>;
+  single(): Promise<DbResult<T>>;
+  maybeSingle(): Promise<DbResult<T | null>>;
+};
 
 export function createAdminDbClient(
   env: Pick<
@@ -98,7 +97,10 @@ export function createAdminDbClient(
 
   return {
     ...client,
-    async query<T = Record<string, unknown>>(sql: string, values: unknown[] = []) {
+    async query<T = Record<string, unknown>>(
+      sql: string,
+      values: unknown[] = [],
+    ) {
       try {
         const result = await executeScopedQuery(pool, scope, sql, values);
         return { data: result.rows as T[], error: null };
@@ -144,7 +146,10 @@ export function createDbClient(options: {
 
   return {
     from<T = any>(table: string) {
-      return new QueryBuilder<T>(table, execute) as unknown as DbQueryBuilder<T>;
+      return new QueryBuilder<T>(
+        table,
+        execute,
+      ) as unknown as DbQueryBuilder<T>;
     },
     rpc(functionName, args = {}) {
       return executeRpc(execute, functionName, args);
@@ -196,9 +201,7 @@ async function executeScopedQuery(
   }
 }
 
-class QueryBuilder<T = any>
-  implements PromiseLike<DbResult<T[] | T>>
-{
+class QueryBuilder<T = any> implements PromiseLike<DbResult<T[] | T>> {
   private filters: Filter[] = [];
   private limitCount: number | null = null;
   private offsetCount: number | null = null;
@@ -329,9 +332,7 @@ class QueryBuilder<T = any>
     onfulfilled?:
       | ((value: DbResult<T[] | T>) => TResult1 | PromiseLike<TResult1>)
       | null,
-    onrejected?:
-      | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
-      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): PromiseLike<TResult1 | TResult2> {
     return this.execute().then(onfulfilled, onrejected);
   }
@@ -341,11 +342,13 @@ class QueryBuilder<T = any>
       const built = this.build();
       const result = await this.executeQuery(built.sql, built.values);
       if (built.head) {
-        const count = Number((result.rows[0] as { count?: number })?.count ?? 0);
+        const count = Number(
+          (result.rows[0] as { count?: number })?.count ?? 0,
+        );
         return { count, data: null, error: null };
       }
       return {
-        count: built.countFromRowCount ? result.rowCount ?? 0 : null,
+        count: built.countFromRowCount ? (result.rowCount ?? 0) : null,
         data: result.rows as T[],
         error: null,
       };
@@ -758,7 +761,9 @@ function buildLimit(
 }
 
 function buildUpsertConflict(columns: string[], conflictColumns: string[]) {
-  const updateColumns = columns.filter((column) => !conflictColumns.includes(column));
+  const updateColumns = columns.filter(
+    (column) => !conflictColumns.includes(column),
+  );
   const conflictSql = conflictColumns.map(quoteIdent).join(", ");
   if (updateColumns.length === 0) {
     return `on conflict (${conflictSql}) do nothing`;

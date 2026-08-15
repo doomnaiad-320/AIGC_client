@@ -48,10 +48,17 @@ export function createCanvasService(options: {
         .single();
 
       if (error || !data) {
-        throw new CanvasServiceError("canvas_not_found", "Canvas not found.", 404);
+        throw new CanvasServiceError(
+          "canvas_not_found",
+          "Canvas not found.",
+          404,
+        );
       }
 
-      const content = (data.content as CanvasContent) ?? { elements: [], appState: {} };
+      const content = (data.content as CanvasContent) ?? {
+        elements: [],
+        appState: {},
+      };
 
       // Resolve OSS-stored files back to base64 dataURLs for the frontend
       const resolvedContent = await resolveStorageReferences(client, content);
@@ -81,7 +88,11 @@ export function createCanvasService(options: {
         .eq("id", canvasId);
 
       if (error) {
-        throw new CanvasServiceError("canvas_save_failed", "Unable to save canvas.", 500);
+        throw new CanvasServiceError(
+          "canvas_save_failed",
+          "Unable to save canvas.",
+          500,
+        );
       }
     },
   };
@@ -95,40 +106,42 @@ type CanvasFileRecord = Record<string, Record<string, unknown>>;
 type CanvasElementRecord = Record<string, unknown>;
 
 function normalizeElementStorageMarkers(content: CanvasContent): CanvasContent {
-  const elements = (content.elements as CanvasElementRecord[]).map((element) => {
-    if (element.type !== "embeddable") return element;
-    const customData = (element.customData ?? {}) as Record<string, unknown>;
-    const assetId = customData.assetId;
-    if (typeof assetId === "string" && assetId.length > 0) {
-      return { ...element, link: `${ASSET_MARKER_PREFIX}${assetId}` };
-    }
+  const elements = (content.elements as CanvasElementRecord[]).map(
+    (element) => {
+      if (element.type !== "embeddable") return element;
+      const customData = (element.customData ?? {}) as Record<string, unknown>;
+      const assetId = customData.assetId;
+      if (typeof assetId === "string" && assetId.length > 0) {
+        return { ...element, link: `${ASSET_MARKER_PREFIX}${assetId}` };
+      }
 
-    const bucket = customData.storageBucket;
-    const objectPath = customData.storageObjectPath;
-    if (
-      typeof bucket === "string" &&
-      typeof objectPath === "string" &&
-      bucket.length > 0 &&
-      objectPath.length > 0
-    ) {
+      const bucket = customData.storageBucket;
+      const objectPath = customData.storageObjectPath;
+      if (
+        typeof bucket === "string" &&
+        typeof objectPath === "string" &&
+        bucket.length > 0 &&
+        objectPath.length > 0
+      ) {
+        return {
+          ...element,
+          link: `${OSS_MARKER_PREFIX}${bucket}/${objectPath}`,
+        };
+      }
+
+      const legacyReference = parseLegacyProjectAssetUrl(element.link);
+      if (!legacyReference) return element;
       return {
         ...element,
-        link: `${OSS_MARKER_PREFIX}${bucket}/${objectPath}`,
+        link: `${OSS_MARKER_PREFIX}${legacyReference.bucket}/${legacyReference.objectPath}`,
+        customData: {
+          ...customData,
+          storageBucket: legacyReference.bucket,
+          storageObjectPath: legacyReference.objectPath,
+        },
       };
-    }
-
-    const legacyReference = parseLegacyProjectAssetUrl(element.link);
-    if (!legacyReference) return element;
-    return {
-      ...element,
-      link: `${OSS_MARKER_PREFIX}${legacyReference.bucket}/${legacyReference.objectPath}`,
-      customData: {
-        ...customData,
-        storageBucket: legacyReference.bucket,
-        storageObjectPath: legacyReference.objectPath,
-      },
-    };
-  });
+    },
+  );
 
   return { ...content, elements } as CanvasContent;
 }
@@ -209,7 +222,12 @@ async function resolveFilesFromStorage(
 
   // Separate OSS files from inline files
   const updatedFiles: CanvasFileRecord = {};
-  const ossEntries: Array<{ fileId: string; fileData: Record<string, unknown>; bucket: string; objectPath: string }> = [];
+  const ossEntries: Array<{
+    fileId: string;
+    fileData: Record<string, unknown>;
+    bucket: string;
+    objectPath: string;
+  }> = [];
 
   for (const [fileId, fileData] of Object.entries(files)) {
     const dataURL = fileData.dataURL as string | undefined;
@@ -371,11 +389,17 @@ function parseDataURL(dataURL: string): { buffer: Buffer; mimeType: string } {
 
 function mimeToExt(mimeType: string): string {
   switch (mimeType) {
-    case "image/png": return "png";
-    case "image/jpeg": return "jpg";
-    case "image/webp": return "webp";
-    case "image/svg+xml": return "svg";
-    case "image/gif": return "gif";
-    default: return "bin";
+    case "image/png":
+      return "png";
+    case "image/jpeg":
+      return "jpg";
+    case "image/webp":
+      return "webp";
+    case "image/svg+xml":
+      return "svg";
+    case "image/gif":
+      return "gif";
+    default:
+      return "bin";
   }
 }

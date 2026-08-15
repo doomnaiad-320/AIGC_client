@@ -62,16 +62,10 @@ export default function PricingPage() {
         if (subscription?.plan && subscription.plan !== "free") {
           await changePlan(token, selectedPlan, period);
           await refreshSubscription();
-          window.location.assign(
-            "/settings?tab=billing&subscription=changed",
-          );
+          window.location.assign("/settings?tab=billing&subscription=changed");
           return;
         }
-        const result = await createCheckout(
-          token,
-          selectedPlan,
-          period,
-        );
+        const result = await createCheckout(token, selectedPlan, period);
         if (result.activated) {
           await refreshSubscription();
           window.location.assign(
@@ -92,11 +86,7 @@ export default function PricingPage() {
         );
       }
     },
-    [
-      refreshSubscription,
-      session?.access_token,
-      subscription?.plan,
-    ],
+    [refreshSubscription, session?.access_token, subscription?.plan],
   );
 
   const hasActiveSubscription =

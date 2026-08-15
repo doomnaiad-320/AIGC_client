@@ -3,8 +3,8 @@ import type { FastifyInstance } from "fastify";
 
 import {
   MODEL_MIN_TIER,
-  getVideoCreditCost,
   type VideoResolution,
+  getVideoCreditCost,
 } from "@loomic/shared";
 
 import type { RequestAuthenticator } from "../auth/user.js";

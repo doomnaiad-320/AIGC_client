@@ -16,15 +16,15 @@ import {
   isVideoResolutionAtMost,
 } from "@loomic/shared";
 
+import {
+  getAvailableImageModel,
+  getAvailableVideoModel,
+} from "../../generation/providers/registry.js";
 import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
 import {
   isImageQualityAllowed,
   isVideoResolutionAllowed,
 } from "../billing/billing-catalog-service.js";
-import {
-  getAvailableImageModel,
-  getAvailableVideoModel,
-} from "../../generation/providers/registry.js";
 
 // ── Error ────────────────────────────────────────────────────
 

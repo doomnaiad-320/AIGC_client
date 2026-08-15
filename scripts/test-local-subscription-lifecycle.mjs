@@ -42,7 +42,9 @@ async function main() {
   await loadEnv();
   const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required for the local subscription test.");
+    throw new Error(
+      "DATABASE_URL is required for the local subscription test.",
+    );
   }
 
   const client = new pg.Client({
@@ -93,7 +95,10 @@ async function main() {
     );
     assert(planCredits.free != null, "Published Free plan is required.");
     assert(planCredits.pro > 0, "Published Pro plan with credits is required.");
-    assert(planCredits.team > 0, "Published Team plan with credits is required.");
+    assert(
+      planCredits.team > 0,
+      "Published Team plan with credits is required.",
+    );
 
     const firstActivation = (
       await client.query(
@@ -103,7 +108,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(firstActivation.action === "activated", "Pro activation did not start a subscription.");
+    assert(
+      firstActivation.action === "activated",
+      "Pro activation did not start a subscription.",
+    );
 
     const firstBalance = Number(
       (
@@ -114,7 +122,10 @@ async function main() {
         )
       ).balance,
     );
-    assert(firstBalance === planCredits.pro, "Pro credits were not granted exactly once.");
+    assert(
+      firstBalance === planCredits.pro,
+      "Pro credits were not granted exactly once.",
+    );
 
     const duplicateActivation = (
       await client.query(
@@ -124,7 +135,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(duplicateActivation.action === "idempotent", "Duplicate activation was not idempotent.");
+    assert(
+      duplicateActivation.action === "idempotent",
+      "Duplicate activation was not idempotent.",
+    );
 
     const samePlanActivation = (
       await client.query(
@@ -134,7 +148,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(samePlanActivation.action === "unchanged", "Same-plan activation should not grant again.");
+    assert(
+      samePlanActivation.action === "unchanged",
+      "Same-plan activation should not grant again.",
+    );
 
     const unchangedBalance = Number(
       (
@@ -145,7 +162,10 @@ async function main() {
         )
       ).balance,
     );
-    assert(unchangedBalance === planCredits.pro, "Idempotent activation changed the balance.");
+    assert(
+      unchangedBalance === planCredits.pro,
+      "Idempotent activation changed the balance.",
+    );
 
     const canceled = (
       await client.query(
@@ -153,7 +173,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(canceled.cancel_at_period_end === true, "Cancellation was not scheduled for period end.");
+    assert(
+      canceled.cancel_at_period_end === true,
+      "Cancellation was not scheduled for period end.",
+    );
 
     const resumed = (
       await client.query(
@@ -161,7 +184,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(resumed.action === "resumed", "Canceled subscription was not resumed.");
+    assert(
+      resumed.action === "resumed",
+      "Canceled subscription was not resumed.",
+    );
 
     const teamActivation = (
       await client.query(
@@ -171,7 +197,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(teamActivation.action === "changed", "Plan change did not replace the subscription.");
+    assert(
+      teamActivation.action === "changed",
+      "Plan change did not replace the subscription.",
+    );
 
     const teamBalance = Number(
       (
@@ -196,8 +225,14 @@ async function main() {
        where workspace_id = $1`,
       [ids.workspace_id],
     );
-    assert(Number(ledgerCounts.grants) === 2, "Expected one Pro and one Team grant.");
-    assert(Number(ledgerCounts.expirations) === 1, "Plan change did not expire old subscription credits.");
+    assert(
+      Number(ledgerCounts.grants) === 2,
+      "Expected one Pro and one Team grant.",
+    );
+    assert(
+      Number(ledgerCounts.expirations) === 1,
+      "Plan change did not expire old subscription credits.",
+    );
 
     await client.query(
       `select public.billing_local_cancel_subscription($1, $2)`,
@@ -226,7 +261,10 @@ async function main() {
         [ids.workspace_id],
       )
     ).rows[0].result;
-    assert(reconciliation.action === "expired", "Canceled subscription did not expire at period end.");
+    assert(
+      reconciliation.action === "expired",
+      "Canceled subscription did not expire at period end.",
+    );
 
     const finalStatus = (
       await client.query(
@@ -234,7 +272,10 @@ async function main() {
         [ids.workspace_id, ids.user_id],
       )
     ).rows[0].result;
-    assert(finalStatus.plan === "free", "Expired subscription did not fall back to Free.");
+    assert(
+      finalStatus.plan === "free",
+      "Expired subscription did not fall back to Free.",
+    );
 
     const finalBalance = Number(
       (
@@ -245,7 +286,10 @@ async function main() {
         )
       ).balance,
     );
-    assert(finalBalance === 0, "Expired subscription credits remained in the balance.");
+    assert(
+      finalBalance === 0,
+      "Expired subscription credits remained in the balance.",
+    );
 
     console.log(
       JSON.stringify(

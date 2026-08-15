@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import pg from "pg";
@@ -22,7 +22,7 @@ async function loadEnv() {
         const key = trimmed.slice(0, separator).trim();
         let value = trimmed.slice(separator + 1).trim();
         if (
-          (value.startsWith("\"") && value.endsWith("\"")) ||
+          (value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))
         ) {
           value = value.slice(1, -1);
@@ -43,7 +43,9 @@ async function main() {
   await loadEnv();
   const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required. Add it to .env.local or the process environment.");
+    throw new Error(
+      "DATABASE_URL is required. Add it to .env.local or the process environment.",
+    );
   }
 
   const files = (await readdir(MIGRATIONS_DIR))
@@ -103,7 +105,9 @@ async function main() {
 
     console.log(`Applied ${files.length} PostgreSQL migration files.`);
   } finally {
-    await client.query("select pg_advisory_unlock(hashtext($1))", [LOCK_KEY]).catch(() => {});
+    await client
+      .query("select pg_advisory_unlock(hashtext($1))", [LOCK_KEY])
+      .catch(() => {});
     await client.end();
   }
 }

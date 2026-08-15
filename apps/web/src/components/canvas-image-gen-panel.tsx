@@ -4,9 +4,9 @@ import { useCallback, useRef, useState } from "react";
 
 import type { ImageArtifact } from "@loomic/shared";
 
-import { generateImageDirect } from "../lib/server-api";
-import { insertImageOnCanvas } from "../lib/canvas-elements";
 import { useGenerationErrorHandler } from "../hooks/use-generation-error-handler";
+import { insertImageOnCanvas } from "../lib/canvas-elements";
+import { generateImageDirect } from "../lib/server-api";
 
 type CanvasImageGenPanelProps = {
   accessToken: string;
@@ -33,7 +33,10 @@ export function CanvasImageGenPanel({
     setError(null);
 
     try {
-      const result = await generateImageDirect(accessTokenRef.current, prompt.trim());
+      const result = await generateImageDirect(
+        accessTokenRef.current,
+        prompt.trim(),
+      );
 
       if (excalidrawApi) {
         const artifact: ImageArtifact = {

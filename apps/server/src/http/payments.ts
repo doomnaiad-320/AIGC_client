@@ -1,8 +1,8 @@
 import type { BillingPeriod, BillingPlanCode } from "@loomic/shared";
 import {
   applicationErrorResponseSchema,
-  billingPlanCodeSchema,
   billingPeriodSchema,
+  billingPlanCodeSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
 // @credits-system — Payment API routes: checkout, subscription status, plan change, cancellation

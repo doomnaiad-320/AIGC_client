@@ -219,10 +219,10 @@ async function main() {
           "delete from public.background_jobs where workspace_id in ($1, $2)",
           [workspaceAId, workspaceBId],
         );
-        await admin.query("delete from public.workspaces where id in ($1, $2)", [
-          workspaceAId,
-          workspaceBId,
-        ]);
+        await admin.query(
+          "delete from public.workspaces where id in ($1, $2)",
+          [workspaceAId, workspaceBId],
+        );
         await admin.query("delete from public.app_users where id in ($1, $2)", [
           userAId,
           userBId,

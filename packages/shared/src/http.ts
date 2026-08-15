@@ -14,10 +14,7 @@ import {
   workspaceSettingsSchema,
   workspaceSummarySchema,
 } from "./contracts.js";
-import {
-  imageQualityLevelSchema,
-  videoResolutionSchema,
-} from "./credits.js";
+import { imageQualityLevelSchema, videoResolutionSchema } from "./credits.js";
 
 export const healthResponseSchema = z.object({
   ok: z.literal(true),

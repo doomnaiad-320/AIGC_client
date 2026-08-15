@@ -456,11 +456,12 @@ function parseVersion(
 ): AdminBillingPlanVersion | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
+  if (record.currency !== "USD") return null;
   return {
     id: String(record.id),
     version: Number(record.version),
     status: record.status as AdminBillingPlanVersion["status"],
-    currency: String(record.currency),
+    currency: record.currency,
     monthlyPriceMinor: Number(record.monthlyPriceMinor),
     annualPriceMinor: Number(record.annualPriceMinor),
     monthlySubscriptionCredits: Number(record.monthlySubscriptionCredits),

@@ -1,9 +1,9 @@
-import type { GeneratedVideo, VideoGenerateParams } from "./types.js";
 import {
   DEFAULT_VIDEO_RESOLUTION,
   type VideoResolution,
   isVideoResolutionAtMost,
 } from "@loomic/shared";
+import type { GeneratedVideo, VideoGenerateParams } from "./types.js";
 
 import {
   getAvailableVideoModel,

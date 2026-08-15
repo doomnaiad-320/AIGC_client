@@ -1,28 +1,32 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockFetchViewer,
-  mockRegisterWithPassword,
-  mockReplace,
-} = vi.hoisted(() => ({
-  mockFetchViewer: vi.fn().mockResolvedValue({
-    workspace: { id: "w1" },
-    profile: { id: "u1" },
-    membership: { workspaceId: "w1", userId: "u1", role: "owner" },
+const { mockFetchViewer, mockRegisterWithPassword, mockReplace } = vi.hoisted(
+  () => ({
+    mockFetchViewer: vi.fn().mockResolvedValue({
+      workspace: { id: "w1" },
+      profile: { id: "u1" },
+      membership: { workspaceId: "w1", userId: "u1", role: "owner" },
+    }),
+    mockRegisterWithPassword: vi.fn().mockResolvedValue({
+      session: {
+        access_token: "fresh-token",
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        token_type: "bearer",
+        user: { id: "u1", email: "new-user@example.com", user_metadata: {} },
+      },
+    }),
+    mockReplace: vi.fn(),
   }),
-  mockRegisterWithPassword: vi.fn().mockResolvedValue({
-    session: {
-      access_token: "fresh-token",
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
-      token_type: "bearer",
-      user: { id: "u1", email: "new-user@example.com", user_metadata: {} },
-    },
-  }),
-  mockReplace: vi.fn(),
-}));
+);
 
 vi.mock("../src/lib/server-api", () => {
   class ApiAuthError extends Error {}
@@ -52,11 +56,13 @@ import { AuthProvider } from "../src/lib/auth-context";
 describe("Register page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("scrollTo", vi.fn());
     window.localStorage.clear();
   });
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
     window.localStorage.clear();
   });
 
@@ -106,7 +112,9 @@ describe("Register page", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Passwords do not match");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Passwords do not match",
+    );
     expect(mockRegisterWithPassword).not.toHaveBeenCalled();
   });
 });

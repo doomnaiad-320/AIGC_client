@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -72,15 +78,21 @@ describe("Login page", () => {
     );
 
     expect((await screen.findByText("Loomic")).textContent).toBe("Loomic");
-    expect(screen.getByText(/Sign in with email and password/i).textContent).toContain(
-      "Sign in with email and password",
-    );
-    expect(screen.getByRole("button", { name: /^sign in$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /create one/i }).getAttribute("href")).toBe("/register");
+    expect(
+      screen.getByText(/Sign in with email and password/i).textContent,
+    ).toContain("Sign in with email and password");
+    expect(
+      screen.getByRole("button", { name: /^sign in$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /create one/i }).getAttribute("href"),
+    ).toBe("/register");
   });
 
   it("shows callback errors from the query string as a banner", async () => {
-    mockSearchParams.mockReturnValue(new URLSearchParams("error=auth_exchange_failed"));
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams("error=auth_exchange_failed"),
+    );
 
     render(
       <AuthProvider>

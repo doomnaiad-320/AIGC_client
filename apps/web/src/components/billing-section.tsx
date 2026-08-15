@@ -15,7 +15,6 @@ import {
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
-import { useSubscription } from "@/hooks/use-subscription";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useSubscription } from "@/hooks/use-subscription";
 
 const planLabels = {
   enterprise: "企业版",
@@ -86,11 +86,7 @@ export function BillingSection() {
           title="刷新订阅状态"
           variant="outline"
         >
-          {loading ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <RefreshCw />
-          )}
+          {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
         </Button>
       </div>
 
@@ -230,7 +226,8 @@ function SubscriptionPanel({
           <div className="flex items-start gap-3 border-b bg-muted/35 px-5 py-4">
             <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
             <p className="text-sm text-muted-foreground">
-              当前为本地订阅模拟，套餐、点数和周期状态均写入 PostgreSQL，不会产生真实扣款。
+              当前为本地订阅模拟，套餐、点数和周期状态均写入
+              PostgreSQL，不会产生真实扣款。
             </p>
           </div>
         ) : null}

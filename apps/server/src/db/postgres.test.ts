@@ -20,8 +20,8 @@ describe("createPostgresTypeOverrides", () => {
     expect(parseTimestamp("2026-08-10 04:34:56.123456")).toBe(
       "2026-08-10T04:34:56.123Z",
     );
-    expect(
-      parseTimestampWithTimeZone("2026-08-10 12:34:56.123456+08"),
-    ).toBe("2026-08-10T04:34:56.123Z");
+    expect(parseTimestampWithTimeZone("2026-08-10 12:34:56.123456+08")).toBe(
+      "2026-08-10T04:34:56.123Z",
+    );
   });
 });

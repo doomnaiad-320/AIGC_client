@@ -9,15 +9,12 @@ import {
   viewerResponseSchema,
 } from "@loomic/shared";
 
+import type { RequestAuthenticator, UserDbClient } from "../auth/user.js";
 import {
   BootstrapError,
   type ViewerService,
 } from "../features/bootstrap/ensure-user-foundation.js";
 import type { CreditService } from "../features/credits/credit-service.js";
-import type {
-  RequestAuthenticator,
-  UserDbClient,
-} from "../auth/user.js";
 
 export async function registerViewerRoutes(
   app: FastifyInstance,

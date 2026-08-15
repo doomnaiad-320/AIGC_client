@@ -4,14 +4,11 @@ import type {
   ProjectUpdateRequest,
 } from "@loomic/shared";
 
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 import {
   BootstrapError,
   type ViewerService,
 } from "../bootstrap/ensure-user-foundation.js";
-import type {
-  AuthenticatedUser,
-  UserDbClient,
-} from "../../auth/user.js";
 
 const THUMBNAIL_BUCKET = "project-assets";
 const SIGNED_URL_EXPIRY_SECONDS = 3600;
@@ -24,10 +21,7 @@ const PROJECT_SLUG_TAKEN_MESSAGE =
   "Project slug is already taken in this workspace.";
 
 export type ProjectService = {
-  archiveProject(
-    user: AuthenticatedUser,
-    projectId: string,
-  ): Promise<void>;
+  archiveProject(user: AuthenticatedUser, projectId: string): Promise<void>;
   createProject(
     user: AuthenticatedUser,
     input: ProjectCreateRequest,
@@ -134,17 +128,33 @@ export function createProjectService(options: {
       const client = options.createUserClient(user.accessToken);
       const { data, error } = await client
         .from("projects")
-        .select("id, name, slug, description, workspace_id, brand_kit_id, created_at, updated_at")
+        .select(
+          "id, name, slug, description, workspace_id, brand_kit_id, created_at, updated_at",
+        )
         .eq("id", projectId)
         .is("archived_at", null)
         .maybeSingle();
 
-      if (error) throw new ProjectServiceError("project_query_failed", "Failed to load project.", 500);
-      if (!data) throw new ProjectServiceError("project_not_found", "Project not found.", 404);
+      if (error)
+        throw new ProjectServiceError(
+          "project_query_failed",
+          "Failed to load project.",
+          500,
+        );
+      if (!data)
+        throw new ProjectServiceError(
+          "project_not_found",
+          "Project not found.",
+          404,
+        );
       return data;
     },
     async createProject(user, input) {
-      await ensureFoundation(options.viewerService, user, "project_create_failed");
+      await ensureFoundation(
+        options.viewerService,
+        user,
+        "project_create_failed",
+      );
 
       const client = options.createUserClient(user.accessToken);
       const workspace = await resolvePersonalWorkspace(
@@ -155,16 +165,14 @@ export function createProjectService(options: {
       const normalizedName = input.name.trim();
       const slug = slugify(normalizedName);
 
-      const { data, error } = await client.rpc(
-        "create_project_with_canvas",
-        {
-          p_workspace_id: workspace.id,
-          p_name: normalizedName,
-          p_slug: slug,
-          p_description: (normalizeDescription(input.description) ?? "") as string,
-          p_canvas_name: "Main Canvas",
-        },
-      );
+      const { data, error } = await client.rpc("create_project_with_canvas", {
+        p_workspace_id: workspace.id,
+        p_name: normalizedName,
+        p_slug: slug,
+        p_description: (normalizeDescription(input.description) ??
+          "") as string,
+        p_canvas_name: "Main Canvas",
+      });
 
       if (error) {
         throw mapProjectCreateError(error);
@@ -250,7 +258,10 @@ export function createProjectService(options: {
       }
 
       const primaryCanvasByProjectId = new Map(
-        ((canvases ?? []) as any[]).map((canvas: any) => [canvas.project_id, canvas]),
+        ((canvases ?? []) as any[]).map((canvas: any) => [
+          canvas.project_id,
+          canvas,
+        ]),
       );
 
       // Generate short-lived thumbnail URLs for projects that have them.
@@ -289,7 +300,11 @@ export function createProjectService(options: {
         .eq("id", projectId)
         .single();
       if (!proj) {
-        throw new ProjectServiceError("project_create_failed", "Project not found.", 404);
+        throw new ProjectServiceError(
+          "project_create_failed",
+          "Project not found.",
+          404,
+        );
       }
 
       const ext = mimeType === "image/webp" ? "webp" : "png";
@@ -338,7 +353,8 @@ export function createProjectService(options: {
       const client = options.createUserClient(user.accessToken);
 
       const payload: Record<string, unknown> = {};
-      if (input.brand_kit_id !== undefined) payload.brand_kit_id = input.brand_kit_id;
+      if (input.brand_kit_id !== undefined)
+        payload.brand_kit_id = input.brand_kit_id;
       if (input.name !== undefined) payload.name = input.name;
 
       if (Object.keys(payload).length === 0) {

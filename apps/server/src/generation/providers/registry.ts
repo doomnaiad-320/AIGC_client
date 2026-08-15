@@ -20,7 +20,11 @@ export function registerVideoProvider(provider: VideoProvider): void {
 export function getImageProvider(name: string): ImageProvider {
   const provider = imageProviders.get(name);
   if (!provider) {
-    throw new GenerationError(name, "provider_not_found", `No image provider registered: ${name}`);
+    throw new GenerationError(
+      name,
+      "provider_not_found",
+      `No image provider registered: ${name}`,
+    );
   }
   return provider;
 }
@@ -28,7 +32,11 @@ export function getImageProvider(name: string): ImageProvider {
 export function getVideoProvider(name: string): VideoProvider {
   const provider = videoProviders.get(name);
   if (!provider) {
-    throw new GenerationError(name, "provider_not_found", `No video provider registered: ${name}`);
+    throw new GenerationError(
+      name,
+      "provider_not_found",
+      `No video provider registered: ${name}`,
+    );
   }
   return provider;
 }
@@ -57,13 +65,17 @@ export function getAvailableVideoModels(): AvailableVideoModel[] {
 }
 
 export function getAvailableImageModel(modelId: string): AvailableModel | null {
-  return getAvailableImageModels().find((model) => model.id === modelId) ?? null;
+  return (
+    getAvailableImageModels().find((model) => model.id === modelId) ?? null
+  );
 }
 
 export function getAvailableVideoModel(
   modelId: string,
 ): AvailableVideoModel | null {
-  return getAvailableVideoModels().find((model) => model.id === modelId) ?? null;
+  return (
+    getAvailableVideoModels().find((model) => model.id === modelId) ?? null
+  );
 }
 
 /** Resolves the provider name that handles a given image model ID. */

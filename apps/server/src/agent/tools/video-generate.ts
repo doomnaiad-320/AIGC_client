@@ -1,16 +1,13 @@
+import { DEFAULT_VIDEO_RESOLUTION, type VideoResolution } from "@loomic/shared";
 import { tool } from "langchain";
 import { z } from "zod";
-import {
-  DEFAULT_VIDEO_RESOLUTION,
-  type VideoResolution,
-} from "@loomic/shared";
 
-import { generateVideo } from "../../generation/video-generation.js";
 import {
+  type AvailableModel,
   getAvailableVideoModels,
   resolveVideoProviderName,
-  type AvailableModel,
 } from "../../generation/providers/registry.js";
+import { generateVideo } from "../../generation/video-generation.js";
 
 const DEFAULT_MODEL = "wan-video/wan-2.6";
 
@@ -42,7 +39,7 @@ function buildVideoGenerateSchema(models: AvailableModel[]) {
   const modelIds = models.map((m) => m.id);
   const defaultModel = modelIds.includes(DEFAULT_MODEL)
     ? DEFAULT_MODEL
-    : modelIds[0] ?? DEFAULT_MODEL;
+    : (modelIds[0] ?? DEFAULT_MODEL);
 
   const modelDescription = models.length
     ? `Video model to use. Available:\n${models.map((m) => `- ${m.id}: ${m.description}`).join("\n")}`
@@ -84,12 +81,16 @@ function buildVideoGenerateSchema(models: AvailableModel[]) {
       .enum(["720p", "1080p", "4k"])
       .optional()
       .default(DEFAULT_VIDEO_RESOLUTION)
-      .describe("Output resolution. 720p recommended for balance of quality and speed. 1080p/4k supported by Google Veo official models (8s duration required)."),
+      .describe(
+        "Output resolution. 720p recommended for balance of quality and speed. 1080p/4k supported by Google Veo official models (8s duration required).",
+      ),
     aspectRatio: z
       .enum(["1:1", "16:9", "9:16", "4:3", "3:4"])
       .optional()
       .default("16:9")
-      .describe("Video aspect ratio. 16:9 for landscape, 9:16 for portrait/mobile."),
+      .describe(
+        "Video aspect ratio. 16:9 for landscape, 9:16 for portrait/mobile.",
+      ),
     inputImages: z
       .array(z.string())
       .max(7)
@@ -100,7 +101,9 @@ function buildVideoGenerateSchema(models: AvailableModel[]) {
     inputVideo: z
       .string()
       .optional()
-      .describe("Source video URL for video-to-video editing. Only for Kling O1."),
+      .describe(
+        "Source video URL for video-to-video editing. Only for Kling O1.",
+      ),
     enableAudio: z
       .boolean()
       .optional()
@@ -160,16 +163,25 @@ export async function runVideoGenerate(
 ): Promise<VideoGenerateResult> {
   const t0 = Date.now();
   const lap = (label: string, extra?: Record<string, unknown>) => {
-    console.log(`[generate_video] ${label} +${Date.now() - t0}ms`, extra ? JSON.stringify(extra) : "");
+    console.log(
+      `[generate_video] ${label} +${Date.now() - t0}ms`,
+      extra ? JSON.stringify(extra) : "",
+    );
   };
   const resolution = input.resolution ?? DEFAULT_VIDEO_RESOLUTION;
 
   // Filter invalid image references
   if (input.inputImages?.length) {
     const validImages = input.inputImages.filter(
-      (img) => img.startsWith("http://") || img.startsWith("https://") || img.startsWith("data:"),
+      (img) =>
+        img.startsWith("http://") ||
+        img.startsWith("https://") ||
+        img.startsWith("data:"),
     );
-    input = { ...input, inputImages: validImages.length > 0 ? validImages : undefined };
+    input = {
+      ...input,
+      inputImages: validImages.length > 0 ? validImages : undefined,
+    };
   }
 
   // Job mode: submit to PGMQ and wait for worker
@@ -207,12 +219,16 @@ export async function runVideoGenerate(
         summary: `Generated ${jobResult.durationSeconds ?? input.duration}s video (${jobResult.width ?? 0}x${jobResult.height ?? 0}) via ${input.model}`,
         title: input.title,
         prompt: input.prompt,
-        ...(jobResult.elementId != null ? { elementId: jobResult.elementId } : {}),
+        ...(jobResult.elementId != null
+          ? { elementId: jobResult.elementId }
+          : {}),
         mimeType: jobResult.mimeType ?? "video/mp4",
         ...(jobResult.videoUrl != null ? { videoUrl: jobResult.videoUrl } : {}),
         ...(jobResult.width != null ? { width: jobResult.width } : {}),
         ...(jobResult.height != null ? { height: jobResult.height } : {}),
-        ...(jobResult.durationSeconds != null ? { durationSeconds: jobResult.durationSeconds } : {}),
+        ...(jobResult.durationSeconds != null
+          ? { durationSeconds: jobResult.durationSeconds }
+          : {}),
       };
       if (input.placementX != null && input.placementY != null) {
         result.placement = {

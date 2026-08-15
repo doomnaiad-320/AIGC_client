@@ -1,7 +1,4 @@
-import type {
-  ImageQualityLevel,
-  VideoResolution,
-} from "@loomic/shared";
+import type { ImageQualityLevel, VideoResolution } from "@loomic/shared";
 
 /** Metadata describing a model supported by a provider. */
 export interface ModelInfo {

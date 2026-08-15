@@ -5,10 +5,7 @@ import type {
   Json,
 } from "@loomic/shared";
 
-import type {
-  AuthenticatedUser,
-  UserDbClient,
-} from "../../auth/user.js";
+import type { AuthenticatedUser, UserDbClient } from "../../auth/user.js";
 import type { AdminDbClient } from "../../db/client.js";
 
 export class JobServiceError extends Error {
@@ -48,7 +45,10 @@ export type CreateJobInput = {
 };
 
 export type JobService = {
-  createJob(user: AuthenticatedUser, input: CreateJobInput): Promise<BackgroundJob>;
+  createJob(
+    user: AuthenticatedUser,
+    input: CreateJobInput,
+  ): Promise<BackgroundJob>;
   getJob(user: AuthenticatedUser, jobId: string): Promise<BackgroundJob>;
   listJobs(
     user: AuthenticatedUser,
@@ -60,9 +60,19 @@ export type JobService = {
   // Admin-only methods (use admin client, no user auth)
   markRunning(jobId: string): Promise<boolean>;
   markSucceeded(jobId: string, result: Record<string, unknown>): Promise<void>;
-  markFailed(jobId: string, errorCode: string, errorMessage: string): Promise<void>;
-  markDeadLetter(jobId: string, errorCode: string, errorMessage: string): Promise<void>;
-  incrementAttempt(jobId: string): Promise<{ attempt_count: number; max_attempts: number }>;
+  markFailed(
+    jobId: string,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<void>;
+  markDeadLetter(
+    jobId: string,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<void>;
+  incrementAttempt(
+    jobId: string,
+  ): Promise<{ attempt_count: number; max_attempts: number }>;
 };
 
 export function createJobService(options: {
@@ -184,10 +194,7 @@ export function createJobService(options: {
         );
       }
 
-      return await mapJobRow(
-        job as unknown as Record<string, unknown>,
-        client,
-      );
+      return await mapJobRow(job as unknown as Record<string, unknown>, client);
     },
 
     async getJob(user, jobId) {
@@ -199,15 +206,16 @@ export function createJobService(options: {
         .maybeSingle();
 
       if (error) {
-        throw new JobServiceError("job_query_failed", "Failed to query job.", 500);
+        throw new JobServiceError(
+          "job_query_failed",
+          "Failed to query job.",
+          500,
+        );
       }
       if (!job) {
         throw new JobServiceError("job_not_found", "Job not found.", 404);
       }
-      return await mapJobRow(
-        job as unknown as Record<string, unknown>,
-        client,
-      );
+      return await mapJobRow(job as unknown as Record<string, unknown>, client);
     },
 
     async listJobs(user, filters) {
@@ -224,7 +232,11 @@ export function createJobService(options: {
 
       const { data: jobs, error } = await query;
       if (error) {
-        throw new JobServiceError("job_query_failed", "Failed to list jobs.", 500);
+        throw new JobServiceError(
+          "job_query_failed",
+          "Failed to list jobs.",
+          500,
+        );
       }
       return await Promise.all(
         ((jobs ?? []) as any[]).map((row: any) =>
@@ -244,7 +256,11 @@ export function createJobService(options: {
         .maybeSingle();
 
       if (error) {
-        throw new JobServiceError("job_cancel_failed", "Failed to cancel job.", 500);
+        throw new JobServiceError(
+          "job_cancel_failed",
+          "Failed to cancel job.",
+          500,
+        );
       }
       if (!job) {
         throw new JobServiceError(
@@ -253,10 +269,7 @@ export function createJobService(options: {
           404,
         );
       }
-      return await mapJobRow(
-        job as unknown as Record<string, unknown>,
-        client,
-      );
+      return await mapJobRow(job as unknown as Record<string, unknown>, client);
     },
 
     async getJobAdmin(jobId) {
@@ -268,15 +281,16 @@ export function createJobService(options: {
         .maybeSingle();
 
       if (error) {
-        throw new JobServiceError("job_query_failed", "Failed to query job.", 500);
+        throw new JobServiceError(
+          "job_query_failed",
+          "Failed to query job.",
+          500,
+        );
       }
       if (!job) {
         throw new JobServiceError("job_not_found", "Job not found.", 404);
       }
-      return await mapJobRow(
-        job as unknown as Record<string, unknown>,
-        admin,
-      );
+      return await mapJobRow(job as unknown as Record<string, unknown>, admin);
     },
 
     // --- Admin-only methods (admin client, bypasses RLS) ---
@@ -341,12 +355,18 @@ export function createJobService(options: {
     async incrementAttempt(jobId) {
       const admin = options.getAdminClient();
       // NOTE: increment_job_attempt may not be in generated PostgreSQL types yet.
-      const { data, error } = await (admin as any).rpc("increment_job_attempt", {
-        p_job_id: jobId,
-      });
+      const { data, error } = await (admin as any).rpc(
+        "increment_job_attempt",
+        {
+          p_job_id: jobId,
+        },
+      );
 
       if (error) {
-        console.error("[job-service] increment_job_attempt RPC failed:", error.message);
+        console.error(
+          "[job-service] increment_job_attempt RPC failed:",
+          error.message,
+        );
         return { attempt_count: 1, max_attempts: 3 };
       }
 

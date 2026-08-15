@@ -19,7 +19,9 @@ export function createLocalSubscriptionService(options: {
     sql: string,
     values: unknown[],
   ): Promise<T> => {
-    const { data, error } = await options.getAdminClient().query<T>(sql, values);
+    const { data, error } = await options
+      .getAdminClient()
+      .query<T>(sql, values);
     const result = data?.[0];
     if (error || !result) {
       throw mapLocalSubscriptionError(error?.message);
@@ -72,13 +74,7 @@ export function createLocalSubscriptionService(options: {
     },
 
     async changePlan(workspaceId, actorUserId, newPlanId, billingPeriod) {
-      await activate(
-        workspaceId,
-        actorUserId,
-        newPlanId,
-        billingPeriod,
-        call,
-      );
+      await activate(workspaceId, actorUserId, newPlanId, billingPeriod, call);
     },
   };
 }
@@ -97,13 +93,7 @@ async function activate(
     `select public.billing_local_activate_subscription(
        $1::uuid, $2::uuid, $3::text, $4::text, $5::text
      ) as result`,
-    [
-      workspaceId,
-      actorUserId,
-      planId,
-      billingPeriod,
-      `local:${randomUUID()}`,
-    ],
+    [workspaceId, actorUserId, planId, billingPeriod, `local:${randomUUID()}`],
   );
 }
 

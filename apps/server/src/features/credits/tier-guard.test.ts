@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
 import {
   clearProviders,
   registerImageProvider,
   registerVideoProvider,
 } from "../../generation/providers/registry.js";
+import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
 import { createTierGuard } from "./tier-guard.js";
 
 const getRuntimePlanConfig = vi.fn(async () => ({

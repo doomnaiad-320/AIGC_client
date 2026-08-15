@@ -1,5 +1,5 @@
-import type { GeneratedImage, ImageGenerateParams } from "./types.js";
 import { DEFAULT_IMAGE_QUALITY, isImageQualityAtMost } from "@loomic/shared";
+import type { GeneratedImage, ImageGenerateParams } from "./types.js";
 
 import {
   getAvailableImageModel,

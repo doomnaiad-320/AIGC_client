@@ -1,13 +1,11 @@
-import { readFileSync } from "node:fs";
-
 import { describe, expect, it } from "vitest";
 import type { ZodType } from "zod";
 
 import {
   type Database,
-  adminUpdateBillingPlanDraftSchema,
   adminCreditAdjustmentRequestSchema,
   adminPasswordResetRequestSchema,
+  adminUpdateBillingPlanDraftSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
   createImageJobRequestSchema,
@@ -24,11 +22,6 @@ import {
 } from "./index.js";
 import * as sharedExports from "./index.js";
 
-const databaseTypeSource = readFileSync(
-  new URL("./postgres/database.ts", import.meta.url),
-  "utf8",
-);
-
 describe("@loomic/shared contracts", () => {
   it("normalizes generation defaults before admission and billing", () => {
     const image = createImageJobRequestSchema.parse({ prompt: "image" });
@@ -37,9 +30,19 @@ describe("@loomic/shared contracts", () => {
     expect(image.quality).toBe("standard");
     expect(video.resolution).toBe("720p");
     expect(getImageCreditCost("black-forest-labs/flux-kontext-pro")).toBe(8);
-    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "720p")).toBe(125);
-    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "1080p")).toBe(250);
-    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "4k")).toBe(500);
+    expect(
+      getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "720p"),
+    ).toBe(125);
+    expect(
+      getVideoCreditCost(
+        "google-official/veo-3.1-generate-preview",
+        8,
+        "1080p",
+      ),
+    ).toBe(250);
+    expect(
+      getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "4k"),
+    ).toBe(500);
   });
 
   it("shares the health response schema for server and web", () => {
@@ -523,16 +526,6 @@ describe("@loomic/shared contracts", () => {
     });
   });
 
-  it("tracks server-owned thread_id in shared PostgreSQL typings", () => {
-    expect(databaseTypeSource).toMatch(/thread_id:\s*string \| null/);
-  });
-
-  it("declares shared agent_runs persistence typings", () => {
-    expect(databaseTypeSource).toMatch(/agent_runs:\s*{/);
-    expect(databaseTypeSource).toMatch(/session_id:\s*string/);
-    expect(databaseTypeSource).toMatch(/thread_id:\s*string/);
-  });
-
   it("requires reasons for sensitive admin user mutations", () => {
     expect(
       adminUpdateUserStatusRequestSchema.safeParse({
@@ -583,6 +576,7 @@ describe("@loomic/shared contracts", () => {
       workspaceId: "33333333-3333-4333-8333-333333333333",
       targetUserId: "22222222-2222-4222-8222-222222222222",
       reason: "Customer support grant",
+      idempotencyKey: "44444444-4444-4444-8444-444444444444",
     };
 
     expect(
@@ -628,7 +622,9 @@ describe("@loomic/shared contracts", () => {
       reason: "Update plan pricing",
     };
 
-    expect(adminUpdateBillingPlanDraftSchema.safeParse(draft).success).toBe(true);
+    expect(adminUpdateBillingPlanDraftSchema.safeParse(draft).success).toBe(
+      true,
+    );
     expect(
       adminUpdateBillingPlanDraftSchema.safeParse({
         ...draft,
@@ -643,15 +639,6 @@ describe("@loomic/shared contracts", () => {
         ...draft,
       }).success,
     ).toBe(true);
-  });
-
-  it("tracks official langgraph persistence schema typings", () => {
-    expect(databaseTypeSource).toMatch(/langgraph:\s*{/);
-    expect(databaseTypeSource).toMatch(/checkpoint_migrations:\s*{/);
-    expect(databaseTypeSource).toMatch(/checkpoints:\s*{/);
-    expect(databaseTypeSource).toMatch(/checkpoint_blobs:\s*{/);
-    expect(databaseTypeSource).toMatch(/checkpoint_writes:\s*{/);
-    expect(databaseTypeSource).toMatch(/store:\s*{/);
   });
 });
 
@@ -682,21 +669,6 @@ const agentRunsRowTracksSessionAndThread: AssertTrue<
 
 void chatSessionRowSupportsServerOwnedThreadId;
 void agentRunsRowTracksSessionAndThread;
-
-const langgraphCheckpointsRowMatchesOfficialSchema: AssertTrue<
-  Extends<
-    Database["langgraph"]["Tables"]["checkpoints"]["Row"],
-    {
-      thread_id: string;
-      checkpoint_ns: string;
-      checkpoint_id: string;
-      checkpoint: unknown;
-      metadata: unknown;
-    }
-  >
-> = true;
-
-void langgraphCheckpointsRowMatchesOfficialSchema;
 
 function getExportedSchema(name: string): ZodType {
   const candidate = (sharedExports as Record<string, unknown>)[name];

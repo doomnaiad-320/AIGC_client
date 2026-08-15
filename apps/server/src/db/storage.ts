@@ -37,8 +37,19 @@ export type LocalStorageBucket = {
   createSignedUrls(
     objectPaths: string[],
     expiresInSeconds: number,
-  ): Promise<StorageResult<Array<{ error: StorageError | null; path: string; signedUrl: string | null }>>>;
-  copy(sourcePath: string, targetPath: string): Promise<StorageResult<{ path: string }>>;
+  ): Promise<
+    StorageResult<
+      Array<{
+        error: StorageError | null;
+        path: string;
+        signedUrl: string | null;
+      }>
+    >
+  >;
+  copy(
+    sourcePath: string,
+    targetPath: string,
+  ): Promise<StorageResult<{ path: string }>>;
 };
 
 export type LocalStorageClient = {
@@ -81,8 +92,13 @@ export function registerLocalStorageRoutes(
 
     if (!isPublicAsset(bucket, objectPath)) {
       const token = (request.query as { token?: string }).token;
-      if (!token || !isValidSignature(signingSecret, bucket, objectPath, token)) {
-        return reply.code(403).send({ message: "Asset URL expired or invalid." });
+      if (
+        !token ||
+        !isValidSignature(signingSecret, bucket, objectPath, token)
+      ) {
+        return reply
+          .code(403)
+          .send({ message: "Asset URL expired or invalid." });
       }
     }
 
@@ -97,7 +113,9 @@ export function registerLocalStorageRoutes(
       return reply.code(404).send({ message: "Asset not found." });
     }
 
-    return reply.type(contentTypeForPath(objectPath)).send(createReadStream(filePath));
+    return reply
+      .type(contentTypeForPath(objectPath))
+      .send(createReadStream(filePath));
   });
 }
 
@@ -118,7 +136,11 @@ function createBucketClient(options: {
 }): LocalStorageBucket {
   return {
     async upload(objectPath, buffer, uploadOptions = {}) {
-      const filePath = resolveObjectPath(options.root, options.bucket, objectPath);
+      const filePath = resolveObjectPath(
+        options.root,
+        options.bucket,
+        objectPath,
+      );
       if (!filePath) {
         return { data: null, error: { message: "Invalid object path." } };
       }
@@ -144,7 +166,11 @@ function createBucketClient(options: {
     async remove(objectPaths) {
       const removed: { path: string }[] = [];
       for (const objectPath of objectPaths) {
-        const filePath = resolveObjectPath(options.root, options.bucket, objectPath);
+        const filePath = resolveObjectPath(
+          options.root,
+          options.bucket,
+          objectPath,
+        );
         if (!filePath) continue;
         await rm(filePath, { force: true });
         removed.push({ path: objectPath });
@@ -153,7 +179,11 @@ function createBucketClient(options: {
     },
 
     async download(objectPath) {
-      const filePath = resolveObjectPath(options.root, options.bucket, objectPath);
+      const filePath = resolveObjectPath(
+        options.root,
+        options.bucket,
+        objectPath,
+      );
       if (!filePath) {
         return { data: null, error: { message: "Invalid object path." } };
       }
@@ -195,12 +225,16 @@ function createBucketClient(options: {
             `${expiresAt}.${signature}`,
           )}`,
         },
-       error: null,
-     };
-   },
+        error: null,
+      };
+    },
 
     async createSignedUrls(objectPaths, expiresInSeconds) {
-      const rows: Array<{ error: StorageError | null; path: string; signedUrl: string | null }> = [];
+      const rows: Array<{
+        error: StorageError | null;
+        path: string;
+        signedUrl: string | null;
+      }> = [];
       for (const objectPath of objectPaths) {
         const result = await this.createSignedUrl(objectPath, expiresInSeconds);
         rows.push({
@@ -213,13 +247,19 @@ function createBucketClient(options: {
     },
 
     async copy(sourcePath, targetPath) {
-      const sourceFilePath = resolveObjectPath(options.root, options.bucket, sourcePath);
+      const sourceFilePath = resolveObjectPath(
+        options.root,
+        options.bucket,
+        sourcePath,
+      );
       if (!sourceFilePath) {
         return { data: null, error: { message: "Invalid source path." } };
       }
       try {
         const buffer = await readFile(sourceFilePath);
-        const uploaded = await this.upload(targetPath, buffer, { upsert: false });
+        const uploaded = await this.upload(targetPath, buffer, {
+          upsert: false,
+        });
         if (uploaded.error) return uploaded;
         return { data: { path: targetPath }, error: null };
       } catch (error) {
@@ -235,10 +275,15 @@ function resolveObjectPath(root: string, bucket: string, objectPath: string) {
     return null;
   }
 
-  const normalized = path.normalize(objectPath).replace(/^(\.\.(\/|\\|$))+/, "");
+  const normalized = path
+    .normalize(objectPath)
+    .replace(/^(\.\.(\/|\\|$))+/, "");
   const fullPath = path.resolve(root, safeBucket, normalized);
   const bucketRoot = path.resolve(root, safeBucket);
-  if (!fullPath.startsWith(`${bucketRoot}${path.sep}`) && fullPath !== bucketRoot) {
+  if (
+    !fullPath.startsWith(`${bucketRoot}${path.sep}`) &&
+    fullPath !== bucketRoot
+  ) {
     return null;
   }
   return fullPath;
@@ -263,7 +308,10 @@ function isValidSignature(
 ) {
   const [expiresAtRaw, signature] = token.split(".", 2);
   const expiresAt = Number.parseInt(expiresAtRaw ?? "", 10);
-  if (!Number.isInteger(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) {
+  if (
+    !Number.isInteger(expiresAt) ||
+    expiresAt < Math.floor(Date.now() / 1000)
+  ) {
     return false;
   }
   const expected = signAssetUrl(secret, bucket, objectPath, expiresAt);

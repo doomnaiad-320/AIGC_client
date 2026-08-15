@@ -9,17 +9,17 @@ import {
 } from "@loomic/shared";
 
 import type { AgentRunService } from "../agent/runtime.js";
+import type { RequestAuthenticator } from "../auth/user.js";
+import {
+  type AgentRunMetadataService,
+  AgentRunPersistenceError,
+} from "../features/agent-runs/agent-run-service.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
 import {
-  AgentRunPersistenceError,
-  type AgentRunMetadataService,
-} from "../features/agent-runs/agent-run-service.js";
-import {
-  ThreadServiceError,
   type ThreadService,
+  ThreadServiceError,
 } from "../features/chat/thread-service.js";
 import type { SettingsService } from "../features/settings/settings-service.js";
-import type { RequestAuthenticator } from "../auth/user.js";
 
 export async function registerRunRoutes(
   app: FastifyInstance,
@@ -77,7 +77,12 @@ export async function registerRunRoutes(
 
       const response = runCreateResponseSchema.parse(
         agentRuns.createRun(payload, {
-          ...(authenticatedUser ? { accessToken: authenticatedUser.accessToken, userId: authenticatedUser.id } : {}),
+          ...(authenticatedUser
+            ? {
+                accessToken: authenticatedUser.accessToken,
+                userId: authenticatedUser.id,
+              }
+            : {}),
           ...(model ? { model } : {}),
           ...(sessionThread ? { threadId: sessionThread.threadId } : {}),
         }),

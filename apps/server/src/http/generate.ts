@@ -22,18 +22,14 @@ const generateImageRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional(),
-  quality: z
-    .enum(["standard", "hd", "ultra"])
-    .default(DEFAULT_IMAGE_QUALITY),
+  quality: z.enum(["standard", "hd", "ultra"]).default(DEFAULT_IMAGE_QUALITY),
 });
 
 const generateVideoRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   duration: z.number().int().min(3).max(16).optional(),
-  resolution: z
-    .enum(["720p", "1080p", "4k"])
-    .default(DEFAULT_VIDEO_RESOLUTION),
+  resolution: z.enum(["720p", "1080p", "4k"]).default(DEFAULT_VIDEO_RESOLUTION),
   aspectRatio: z.enum(["16:9", "9:16"]).optional(),
   inputImages: z.array(z.string()).max(3).optional(),
 });

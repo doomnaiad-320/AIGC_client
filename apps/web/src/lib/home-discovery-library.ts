@@ -59,6 +59,8 @@ export function mapHomeDiscoveryRows(
     }));
 }
 
-export async function loadHomeDiscoveryCategories(): Promise<HomeDiscoveryCategory[]> {
+export async function loadHomeDiscoveryCategories(): Promise<
+  HomeDiscoveryCategory[]
+> {
   return homeDiscoverySeedCategories;
 }

@@ -4,8 +4,8 @@ import {
   viewerResponseSchema,
 } from "@loomic/shared";
 
-import type { AdminDbClient } from "../../db/client.js";
 import type { AuthenticatedUser } from "../../auth/user.js";
+import type { AdminDbClient } from "../../db/client.js";
 
 const BOOTSTRAP_FAILED_MESSAGE = "Unable to prepare viewer workspace.";
 
@@ -63,10 +63,7 @@ export function createViewerService(options: {
   };
 }
 
-async function loadPersonalWorkspace(
-  admin: AdminDbClient,
-  userId: string,
-) {
+async function loadPersonalWorkspace(admin: AdminDbClient, userId: string) {
   const { data, error } = await admin
     .from("workspaces")
     .select("id, name, type, owner_user_id")

@@ -3,7 +3,11 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AuthProvider, saveAuthSession, useAuth } from "../src/lib/auth-context";
+import {
+  AuthProvider,
+  saveAuthSession,
+  useAuth,
+} from "../src/lib/auth-context";
 
 function TestConsumer() {
   const { user, loading } = useAuth();

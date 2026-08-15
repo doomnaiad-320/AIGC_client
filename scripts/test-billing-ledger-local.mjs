@@ -281,10 +281,22 @@ async function main() {
       )
     ).rows[0].result;
 
-    assert(firstBalance.balance === 220, "Daily grant did not produce the expected balance.");
-    assert(firstBalance.daily_balance === 50, "Daily grant should be 50 credits.");
-    assert(secondBalance.balance === 220, "Daily credits accumulated on a repeated query.");
-    assert(deductId === duplicateDeductId, "Credit deduction is not idempotent.");
+    assert(
+      firstBalance.balance === 220,
+      "Daily grant did not produce the expected balance.",
+    );
+    assert(
+      firstBalance.daily_balance === 50,
+      "Daily grant should be 50 credits.",
+    );
+    assert(
+      secondBalance.balance === 220,
+      "Daily credits accumulated on a repeated query.",
+    );
+    assert(
+      deductId === duplicateDeductId,
+      "Credit deduction is not idempotent.",
+    );
     assert(refundId === duplicateRefundId, "Credit refund is not idempotent.");
     assert(
       JSON.stringify(deductions) ===
@@ -296,11 +308,26 @@ async function main() {
         ]),
       `Unexpected deduction order: ${JSON.stringify(deductions)}`,
     );
-    assert(finalBalance.balance === 220, "Refund did not restore the full balance.");
-    assert(finalBalance.daily_balance === 50, "Refund did not restore daily credits.");
-    assert(finalBalance.subscription_balance === 30, "Refund did not restore subscription credits.");
-    assert(finalBalance.top_up_balance === 40, "Refund did not restore top-up credits.");
-    assert(finalBalance.permanent_balance === 100, "Refund did not restore permanent credits.");
+    assert(
+      finalBalance.balance === 220,
+      "Refund did not restore the full balance.",
+    );
+    assert(
+      finalBalance.daily_balance === 50,
+      "Refund did not restore daily credits.",
+    );
+    assert(
+      finalBalance.subscription_balance === 30,
+      "Refund did not restore subscription credits.",
+    );
+    assert(
+      finalBalance.top_up_balance === 40,
+      "Refund did not restore top-up credits.",
+    );
+    assert(
+      finalBalance.permanent_balance === 100,
+      "Refund did not restore permanent credits.",
+    );
 
     console.log(
       JSON.stringify(

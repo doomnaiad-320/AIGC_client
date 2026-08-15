@@ -3,20 +3,20 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   applicationErrorResponseSchema,
   brandKitAssetCreateRequestSchema,
+  brandKitAssetResponseSchema,
   brandKitAssetUpdateRequestSchema,
   brandKitCreateRequestSchema,
   brandKitDetailResponseSchema,
   brandKitListResponseSchema,
-  brandKitAssetResponseSchema,
   brandKitUpdateRequestSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
 
-import {
-  BrandKitServiceError,
-  type BrandKitService,
-} from "../features/brand-kit/brand-kit-service.js";
 import type { RequestAuthenticator } from "../auth/user.js";
+import {
+  type BrandKitService,
+  BrandKitServiceError,
+} from "../features/brand-kit/brand-kit-service.js";
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   "image/png",

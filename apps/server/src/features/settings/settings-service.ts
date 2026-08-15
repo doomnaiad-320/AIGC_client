@@ -68,15 +68,13 @@ export function createSettingsService(options: {
 
     async updateWorkspaceSettings(user, workspaceId, settings) {
       const client = options.createUserClient(user.accessToken);
-      const { error } = await client
-        .from("workspace_settings")
-        .upsert(
-          {
-            workspace_id: workspaceId,
-            default_model: settings.defaultModel,
-          },
-          { onConflict: "workspace_id" },
-        );
+      const { error } = await client.from("workspace_settings").upsert(
+        {
+          workspace_id: workspaceId,
+          default_model: settings.defaultModel,
+        },
+        { onConflict: "workspace_id" },
+      );
 
       if (error) {
         throw new SettingsServiceError(

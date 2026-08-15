@@ -2,9 +2,9 @@
 import type { FastifyInstance } from "fastify";
 
 import {
+  type ImageQualityLevel,
   MODEL_MIN_TIER,
   getImageCreditCost,
-  type ImageQualityLevel,
 } from "@loomic/shared";
 
 import type { RequestAuthenticator } from "../auth/user.js";

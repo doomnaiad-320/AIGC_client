@@ -224,8 +224,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       onUserAuthChanged: invalidateAuthCacheForUser,
     });
   const tierGuard =
-    options.tierGuard ??
-    createTierGuard({ billingCatalogService });
+    options.tierGuard ?? createTierGuard({ billingCatalogService });
 
   // Optional payment adapter. Local mode exercises the real PostgreSQL
   // lifecycle without requiring a payment provider during development.
@@ -387,10 +386,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   if (paymentService) {
     void registerPaymentRoutes(app, { auth, paymentService, viewerService });
 
-    if (
-      paymentAdapter !== "local" &&
-      env.lemonSqueezyWebhookSecret
-    ) {
+    if (paymentAdapter !== "local" && env.lemonSqueezyWebhookSecret) {
       const configuredPaymentService = paymentService;
       const webhookSecret = env.lemonSqueezyWebhookSecret;
       // Webhook route is registered in an encapsulated plugin so the custom

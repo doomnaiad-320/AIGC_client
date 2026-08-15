@@ -8,12 +8,9 @@ describe("@loomic/web env helpers", () => {
   });
 
   it("loads the explicit server base url", () => {
-    const env = loadWebEnv(
-      {},
-      {
-        NEXT_PUBLIC_SERVER_BASE_URL: "http://localhost:4010",
-      } as unknown as NodeJS.ProcessEnv,
-    );
+    const env = loadWebEnv({}, {
+      NEXT_PUBLIC_SERVER_BASE_URL: "http://localhost:4010",
+    } as unknown as NodeJS.ProcessEnv);
 
     expect(env).toEqual({
       serverBaseUrl: "http://localhost:4010",

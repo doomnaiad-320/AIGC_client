@@ -102,7 +102,10 @@ async function main() {
     } catch (error) {
       insufficientRejected = error?.message?.includes("INSUFFICIENT_CREDITS");
     }
-    assert(insufficientRejected, "Insufficient credits did not reject admission.");
+    assert(
+      insufficientRejected,
+      "Insufficient credits did not reject admission.",
+    );
 
     const rejectedSideEffects = await withRole(
       admin,
@@ -119,9 +122,15 @@ async function main() {
         return result.rows[0];
       },
     );
-    assert(Number(rejectedSideEffects.balance) === 0, "Rejected admission changed the balance.");
+    assert(
+      Number(rejectedSideEffects.balance) === 0,
+      "Rejected admission changed the balance.",
+    );
     assert(rejectedSideEffects.jobs === 0, "Rejected admission created a job.");
-    assert(rejectedSideEffects.ledger === 0, "Rejected admission created a ledger entry.");
+    assert(
+      rejectedSideEffects.ledger === 0,
+      "Rejected admission created a ledger entry.",
+    );
 
     const firstJob = await withRole(user, "authenticated", userId, async () => {
       const result = await user.query(

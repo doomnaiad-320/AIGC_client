@@ -25,7 +25,9 @@ describe("Auth callback page", () => {
     render(<CallbackPage />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/login?error=auth_callback_disabled");
+      expect(mockReplace).toHaveBeenCalledWith(
+        "/login?error=auth_callback_disabled",
+      );
     });
   });
 });

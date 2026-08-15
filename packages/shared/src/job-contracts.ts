@@ -33,7 +33,9 @@ export const imageGenerationPayloadSchema = z.object({
   aspect_ratio: z.string().optional(),
   quality: imageQualityLevelSchema.default(DEFAULT_IMAGE_QUALITY),
 });
-export type ImageGenerationPayload = z.infer<typeof imageGenerationPayloadSchema>;
+export type ImageGenerationPayload = z.infer<
+  typeof imageGenerationPayloadSchema
+>;
 
 export const videoGenerationPayloadSchema = z.object({
   prompt: z.string().min(1),
@@ -45,7 +47,9 @@ export const videoGenerationPayloadSchema = z.object({
   input_video: z.string().optional(),
   enable_audio: z.boolean().optional(),
 });
-export type VideoGenerationPayload = z.infer<typeof videoGenerationPayloadSchema>;
+export type VideoGenerationPayload = z.infer<
+  typeof videoGenerationPayloadSchema
+>;
 
 export const createVideoJobRequestSchema = z.object({
   project_id: z.string().uuid().optional(),
