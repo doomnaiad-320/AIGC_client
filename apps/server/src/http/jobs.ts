@@ -1,11 +1,7 @@
 // @credits-system — Job creation routes with credit balance checks and tier enforcement
 import type { FastifyInstance, FastifyReply } from "fastify";
 
-import type {
-  BackgroundJobStatus,
-  BackgroundJobType,
-  ImageQualityLevel,
-} from "@loomic/shared";
+import type { BackgroundJobStatus, BackgroundJobType } from "@loomic/shared";
 import {
   applicationErrorResponseSchema,
   createImageJobRequestSchema,
@@ -50,20 +46,20 @@ export async function registerJobRoutes(
       const viewer = await options.viewerService.ensureViewer(user);
 
       // Credit checks (skip if credit system not configured)
-      const model = payload.model ?? "black-forest-labs/flux-kontext-pro";
+      const model = payload.model ?? "google/nano-banana";
       let creditsCost = 0;
 
       if (options.creditService && options.tierGuard) {
-        const planConfig = await options.creditService.getPlanConfig(
-          viewer.workspace.id,
-        );
-        // Use the plan's max resolution as the quality for cost calculation
-        const quality: ImageQualityLevel = planConfig.maxImageQuality;
         await options.tierGuard.checkModelAccess(viewer.workspace.id, model);
+        await options.tierGuard.checkResolution(
+          viewer.workspace.id,
+          payload.quality,
+        );
+        await options.tierGuard.checkImageModelQuality(model, payload.quality);
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "image_generation",
-          { quality },
+          { quality: payload.quality },
         );
       }
 
@@ -88,7 +84,8 @@ export async function registerJobRoutes(
           : {}),
         payload: {
           prompt: payload.prompt,
-          ...(payload.model !== undefined ? { model: payload.model } : {}),
+          model,
+          quality: payload.quality,
           ...(payload.aspect_ratio !== undefined
             ? { aspect_ratio: payload.aspect_ratio }
             : {}),
@@ -121,10 +118,21 @@ export async function registerJobRoutes(
 
       if (options.creditService && options.tierGuard) {
         await options.tierGuard.checkModelAccess(viewer.workspace.id, model);
+        await options.tierGuard.checkVideoResolution(
+          viewer.workspace.id,
+          payload.resolution,
+        );
+        await options.tierGuard.checkVideoModelResolution(
+          model,
+          payload.resolution,
+        );
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "video_generation",
-          payload.duration != null ? { duration: payload.duration } : {},
+          {
+            ...(payload.duration != null ? { duration: payload.duration } : {}),
+            resolution: payload.resolution,
+          },
         );
       }
 
@@ -149,13 +157,11 @@ export async function registerJobRoutes(
           : {}),
         payload: {
           prompt: payload.prompt,
-          ...(payload.model !== undefined ? { model: payload.model } : {}),
+          model,
           ...(payload.duration !== undefined
             ? { duration: payload.duration }
             : {}),
-          ...(payload.resolution !== undefined
-            ? { resolution: payload.resolution }
-            : {}),
+          resolution: payload.resolution,
           ...(payload.aspect_ratio !== undefined
             ? { aspect_ratio: payload.aspect_ratio }
             : {}),

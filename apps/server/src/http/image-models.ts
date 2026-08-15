@@ -1,7 +1,11 @@
 // @credits-system — Image model list with tier annotations, credit costs, and accessibility flags
 import type { FastifyInstance } from "fastify";
 
-import { MODEL_MIN_TIER, getImageCreditCost } from "@loomic/shared";
+import {
+  MODEL_MIN_TIER,
+  getImageCreditCost,
+  type ImageQualityLevel,
+} from "@loomic/shared";
 
 import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
@@ -22,6 +26,7 @@ export async function registerImageModelRoutes(
 
     // Try to authenticate — unauthenticated users still see models
     let allowedModelGroups: string[] | null = null;
+    let maxAllowedQuality: ImageQualityLevel | null = null;
     try {
       const user = await options.auth.authenticate(request);
       if (user) {
@@ -30,6 +35,7 @@ export async function registerImageModelRoutes(
           viewer.workspace.id,
         );
         allowedModelGroups = config.allowedModelGroups;
+        maxAllowedQuality = config.maxImageQuality;
       }
     } catch {
       // Auth failure is non-fatal — just show models as inaccessible
@@ -43,7 +49,14 @@ export async function registerImageModelRoutes(
       provider: m.provider,
       accessible:
         allowedModelGroups?.includes(getModelAccessGroup(m.id)) ?? false,
-      creditCost: getImageCreditCost(m.id, "hd"),
+      creditCost: getImageCreditCost(m.id, "standard"),
+      creditCosts: {
+        standard: getImageCreditCost(m.id, "standard"),
+        hd: getImageCreditCost(m.id, "hd"),
+        ultra: getImageCreditCost(m.id, "ultra"),
+      },
+      maxImageQuality: m.maxImageQuality ?? "ultra",
+      maxAllowedQuality,
       minTier: MODEL_MIN_TIER[m.id] ?? "pro",
     }));
 

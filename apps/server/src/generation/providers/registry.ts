@@ -1,4 +1,9 @@
-import type { ImageProvider, ModelInfo, VideoProvider } from "../types.js";
+import type {
+  ImageProvider,
+  ModelInfo,
+  VideoModelInfo,
+  VideoProvider,
+} from "../types.js";
 import { GenerationError } from "../utils.js";
 
 const imageProviders = new Map<string, ImageProvider>();
@@ -33,6 +38,10 @@ export interface AvailableModel extends ModelInfo {
   provider: string;
 }
 
+export interface AvailableVideoModel extends VideoModelInfo {
+  provider: string;
+}
+
 /** Returns all image models from all registered providers. */
 export function getAvailableImageModels(): AvailableModel[] {
   return [...imageProviders.values()].flatMap((p) =>
@@ -41,10 +50,20 @@ export function getAvailableImageModels(): AvailableModel[] {
 }
 
 /** Returns all video models from all registered providers. */
-export function getAvailableVideoModels(): AvailableModel[] {
+export function getAvailableVideoModels(): AvailableVideoModel[] {
   return [...videoProviders.values()].flatMap((p) =>
     p.models.map((m) => ({ ...m, provider: p.name })),
   );
+}
+
+export function getAvailableImageModel(modelId: string): AvailableModel | null {
+  return getAvailableImageModels().find((model) => model.id === modelId) ?? null;
+}
+
+export function getAvailableVideoModel(
+  modelId: string,
+): AvailableVideoModel | null {
+  return getAvailableVideoModels().find((model) => model.id === modelId) ?? null;
 }
 
 /** Resolves the provider name that handles a given image model ID. */

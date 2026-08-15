@@ -14,6 +14,10 @@ import {
   workspaceSettingsSchema,
   workspaceSummarySchema,
 } from "./contracts.js";
+import {
+  imageQualityLevelSchema,
+  videoResolutionSchema,
+} from "./credits.js";
 
 export const healthResponseSchema = z.object({
   ok: z.literal(true),
@@ -32,7 +36,8 @@ export const viewerCreditsSchema = z.object({
   dailyClaimed: z.boolean(),
   limits: z.object({
     maxConcurrentJobs: z.number().int(),
-    maxResolution: z.string(),
+    maxResolution: imageQualityLevelSchema,
+    maxVideoResolution: videoResolutionSchema,
     monthlyCredits: z.number().int(),
     dailyCredits: z.number().int(),
   }),

@@ -7,9 +7,13 @@ import type {
   VideoResolution,
 } from "@loomic/shared";
 import {
+  DEFAULT_IMAGE_QUALITY,
+  DEFAULT_VIDEO_RESOLUTION,
   MODEL_MIN_TIER,
   getImageCreditCost,
   getVideoCreditCost,
+  isImageQualityAtMost,
+  isVideoResolutionAtMost,
 } from "@loomic/shared";
 
 import type { BillingCatalogService } from "../billing/billing-catalog-service.js";
@@ -17,6 +21,10 @@ import {
   isImageQualityAllowed,
   isVideoResolutionAllowed,
 } from "../billing/billing-catalog-service.js";
+import {
+  getAvailableImageModel,
+  getAvailableVideoModel,
+} from "../../generation/providers/registry.js";
 
 // ── Error ────────────────────────────────────────────────────
 
@@ -49,8 +57,16 @@ export type TierGuard = {
     workspaceId: string,
     quality: ImageQualityLevel,
   ): Promise<void>;
+  checkImageModelQuality(
+    modelId: string,
+    quality: ImageQualityLevel,
+  ): Promise<void>;
   checkVideoResolution(
     workspaceId: string,
+    resolution: VideoResolution,
+  ): Promise<void>;
+  checkVideoModelResolution(
+    modelId: string,
     resolution: VideoResolution,
   ): Promise<void>;
   calculateCreditCost(
@@ -95,6 +111,27 @@ export function createTierGuard(options: {
       }
     },
 
+    async checkImageModelQuality(modelId, quality) {
+      const model = getAvailableImageModel(modelId);
+      if (!model) {
+        throw new TierGuardError(
+          "model_not_accessible",
+          `图片模型“${modelId}”当前不可用。`,
+          400,
+        );
+      }
+      if (
+        model.maxImageQuality &&
+        !isImageQualityAtMost(quality, model.maxImageQuality)
+      ) {
+        throw new TierGuardError(
+          "resolution_not_allowed",
+          `模型“${model.displayName}”最高支持“${model.maxImageQuality}”图片质量。`,
+          400,
+        );
+      }
+    },
+
     async checkVideoResolution(workspaceId, resolution) {
       const config =
         await options.billingCatalogService.getRuntimePlanConfig(workspaceId);
@@ -107,13 +144,42 @@ export function createTierGuard(options: {
       }
     },
 
+    async checkVideoModelResolution(modelId, resolution) {
+      const model = getAvailableVideoModel(modelId);
+      if (!model) {
+        throw new TierGuardError(
+          "model_not_accessible",
+          `视频模型“${modelId}”当前不可用。`,
+          400,
+        );
+      }
+      const maximum: VideoResolution =
+        model.limits.maxResolution === "2160p"
+          ? "4k"
+          : model.limits.maxResolution === "480p"
+            ? "720p"
+            : model.limits.maxResolution;
+      if (!isVideoResolutionAtMost(resolution, maximum)) {
+        throw new TierGuardError(
+          "resolution_not_allowed",
+          `模型“${model.displayName}”最高支持“${maximum}”视频分辨率。`,
+          400,
+        );
+      }
+    },
+
     calculateCreditCost(modelId, jobType, params) {
       if (jobType === "image_generation") {
-        const quality: ImageQualityLevel = params?.quality ?? "hd";
+        const quality: ImageQualityLevel =
+          params?.quality ?? DEFAULT_IMAGE_QUALITY;
         return getImageCreditCost(modelId, quality);
       }
       // video_generation
-      return getVideoCreditCost(modelId, params?.duration, params?.resolution);
+      return getVideoCreditCost(
+        modelId,
+        params?.duration,
+        params?.resolution ?? DEFAULT_VIDEO_RESOLUTION,
+      );
     },
   };
 }

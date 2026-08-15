@@ -3,8 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import {
-  type ImageQualityLevel,
-  type VideoResolution,
+  DEFAULT_IMAGE_QUALITY,
+  DEFAULT_VIDEO_RESOLUTION,
   applicationErrorResponseSchema,
   unauthenticatedErrorResponseSchema,
 } from "@loomic/shared";
@@ -22,14 +22,18 @@ const generateImageRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   aspectRatio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional(),
-  quality: z.enum(["standard", "hd", "ultra"]).optional(),
+  quality: z
+    .enum(["standard", "hd", "ultra"])
+    .default(DEFAULT_IMAGE_QUALITY),
 });
 
 const generateVideoRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   duration: z.number().int().min(3).max(16).optional(),
-  resolution: z.enum(["720p", "1080p", "4k"]).optional(),
+  resolution: z
+    .enum(["720p", "1080p", "4k"])
+    .default(DEFAULT_VIDEO_RESOLUTION),
   aspectRatio: z.enum(["16:9", "9:16"]).optional(),
   inputImages: z.array(z.string()).max(3).optional(),
 });
@@ -71,7 +75,7 @@ export async function registerGenerateRoutes(
       );
     }
 
-    const model = payload.model ?? "black-forest-labs/flux-kontext-pro";
+    const model = payload.model ?? "google/nano-banana";
 
     if (!options.jobService) {
       return reply.code(503).send(
@@ -91,14 +95,16 @@ export async function registerGenerateRoutes(
       let creditsCost = 0;
 
       if (options.creditService && options.tierGuard) {
-        const quality: ImageQualityLevel = payload.quality ?? "hd";
         await options.tierGuard.checkModelAccess(viewer.workspace.id, model);
-        // Throws TierGuardError (resolution_not_allowed) if plan doesn't allow this quality
-        await options.tierGuard.checkResolution(viewer.workspace.id, quality);
+        await options.tierGuard.checkResolution(
+          viewer.workspace.id,
+          payload.quality,
+        );
+        await options.tierGuard.checkImageModelQuality(model, payload.quality);
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "image_generation",
-          { quality },
+          { quality: payload.quality },
         );
       }
 
@@ -113,7 +119,7 @@ export async function registerGenerateRoutes(
           prompt: payload.prompt,
           model,
           aspect_ratio: payload.aspectRatio ?? "1:1",
-          ...(payload.quality ? { quality: payload.quality } : {}),
+          quality: payload.quality,
         },
       });
 
@@ -231,20 +237,20 @@ export async function registerGenerateRoutes(
 
       if (options.creditService && options.tierGuard) {
         await options.tierGuard.checkModelAccess(workspaceId, model);
-        if (payload.resolution) {
-          await options.tierGuard.checkVideoResolution(
-            workspaceId,
-            payload.resolution as VideoResolution,
-          );
-        }
+        await options.tierGuard.checkVideoResolution(
+          workspaceId,
+          payload.resolution,
+        );
+        await options.tierGuard.checkVideoModelResolution(
+          model,
+          payload.resolution,
+        );
         creditsCost = options.tierGuard.calculateCreditCost(
           model,
           "video_generation",
           {
             ...(payload.duration != null ? { duration: payload.duration } : {}),
-            ...(payload.resolution
-              ? { resolution: payload.resolution as VideoResolution }
-              : {}),
+            resolution: payload.resolution,
           },
         );
       }
@@ -261,7 +267,7 @@ export async function registerGenerateRoutes(
           prompt: payload.prompt,
           model,
           ...(payload.duration != null ? { duration: payload.duration } : {}),
-          ...(payload.resolution ? { resolution: payload.resolution } : {}),
+          resolution: payload.resolution,
           ...(payload.aspectRatio ? { aspect_ratio: payload.aspectRatio } : {}),
           ...(payload.inputImages?.length
             ? { input_images: payload.inputImages }

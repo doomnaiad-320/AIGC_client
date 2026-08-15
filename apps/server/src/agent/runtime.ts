@@ -29,7 +29,12 @@ import type { SubmitImageJobFn } from "./tools/image-generate.js";
 import type { SubmitVideoJobFn } from "./tools/video-generate.js";
 import type { CreditService } from "../features/credits/credit-service.js";
 import { TierGuardError, type TierGuard } from "../features/credits/tier-guard.js";
-import { getPlanConfig, type BillingErrorCode, type ImageQualityLevel } from "@loomic/shared";
+import {
+  DEFAULT_IMAGE_QUALITY,
+  DEFAULT_VIDEO_RESOLUTION,
+  getPlanConfig,
+  type BillingErrorCode,
+} from "@loomic/shared";
 import { createAgentBackend } from "./backends/index.js";
 import {
   type LoomicAgent,
@@ -470,12 +475,13 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
 
           // ── Tier guard + credit checks (same as HTTP route) ──
           const workspaceId = ws.id;
+          const quality = input.quality ?? DEFAULT_IMAGE_QUALITY;
           let creditsCost = 0;
           if (options.creditService && options.tierGuard) {
-            const quality = (input.quality as ImageQualityLevel) ?? "hd";
             try {
               await options.tierGuard.checkModelAccess(workspaceId, input.model);
               await options.tierGuard.checkResolution(workspaceId, quality);
+              await options.tierGuard.checkImageModelQuality(input.model, quality);
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);
@@ -514,7 +520,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               title: input.title,
               model: input.model,
               aspect_ratio: input.aspectRatio,
-              ...(input.quality ? { quality: input.quality } : {}),
+              quality,
               ...(input.inputImages ? { input_images: input.inputImages } : {}),
             },
           });
@@ -652,13 +658,19 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
 
           // ── Tier guard + credit checks (same as HTTP route) ──
           const workspaceId = ws.id;
+          const resolution = input.resolution ?? DEFAULT_VIDEO_RESOLUTION;
           let creditsCost = 0;
           if (options.creditService && options.tierGuard) {
             try {
               await options.tierGuard.checkModelAccess(workspaceId, input.model);
-              if (input.resolution) {
-                await options.tierGuard.checkVideoResolution(workspaceId, input.resolution as any);
-              }
+              await options.tierGuard.checkVideoResolution(
+                workspaceId,
+                resolution,
+              );
+              await options.tierGuard.checkVideoModelResolution(
+                input.model,
+                resolution,
+              );
             } catch (err) {
               if (err instanceof TierGuardError) {
                 pushBillingErrorAndAbort(run, canvasId, options, err.code, err.message);
@@ -670,7 +682,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               input.model, "video_generation",
               {
                 ...(input.duration != null ? { duration: input.duration } : {}),
-                ...(input.resolution ? { resolution: input.resolution as any } : {}),
+                resolution,
               },
             );
           }
@@ -702,7 +714,7 @@ export function createAgentRunService(options: CreateAgentRuntimeOptions) {
               prompt: input.prompt,
               model: input.model,
               ...(input.duration != null ? { duration: input.duration } : {}),
-              ...(input.resolution ? { resolution: input.resolution } : {}),
+              resolution,
               ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
               ...(input.inputImages ? { input_images: input.inputImages } : {}),
               ...(input.inputVideo ? { input_video: input.inputVideo } : {}),

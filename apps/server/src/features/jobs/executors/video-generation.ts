@@ -1,6 +1,10 @@
 import { registerExecutor, type ExecutorContext } from "../job-executor.js";
 import { generateVideo } from "../../../generation/video-generation.js";
 import { resolveVideoProviderName } from "../../../generation/providers/registry.js";
+import {
+  DEFAULT_VIDEO_RESOLUTION,
+  type VideoResolution,
+} from "@loomic/shared";
 
 registerExecutor("video_generation", async (jobId, _rawPayload, ctx: ExecutorContext) => {
   const t0 = Date.now();
@@ -24,7 +28,7 @@ registerExecutor("video_generation", async (jobId, _rawPayload, ctx: ExecutorCon
     prompt: string;
     model?: string;
     duration?: number;
-    resolution?: string;
+    resolution?: VideoResolution;
     aspect_ratio?: string;
     input_images?: string[];
     input_video?: string;
@@ -37,6 +41,7 @@ registerExecutor("video_generation", async (jobId, _rawPayload, ctx: ExecutorCon
   const workspaceId: string = jobRow.workspace_id ?? jobId;
 
   const model = payload.model ?? "wan-video/wan-2.6";
+  const resolution = payload.resolution ?? DEFAULT_VIDEO_RESOLUTION;
   const providerName = resolveVideoProviderName(model);
 
   // Renew VT every 120s (roughly half of the 300s video queue VT) to prevent
@@ -52,7 +57,7 @@ registerExecutor("video_generation", async (jobId, _rawPayload, ctx: ExecutorCon
       prompt: payload.prompt,
       model,
       ...(payload.duration != null ? { duration: payload.duration } : {}),
-      ...(payload.resolution ? { resolution: payload.resolution as "480p" | "720p" | "1080p" } : {}),
+      resolution,
       ...(payload.aspect_ratio ? { aspectRatio: payload.aspect_ratio } : {}),
       ...(payload.input_images?.length ? { inputImages: payload.input_images } : {}),
       ...(payload.input_video ? { inputVideo: payload.input_video } : {}),

@@ -1,7 +1,11 @@
 // @credits-system — Video model list with tier annotations, credit costs, and accessibility flags
 import type { FastifyInstance } from "fastify";
 
-import { MODEL_MIN_TIER, getVideoCreditCost } from "@loomic/shared";
+import {
+  MODEL_MIN_TIER,
+  getVideoCreditCost,
+  type VideoResolution,
+} from "@loomic/shared";
 
 import type { RequestAuthenticator } from "../auth/user.js";
 import type { ViewerService } from "../features/bootstrap/ensure-user-foundation.js";
@@ -22,6 +26,7 @@ export async function registerVideoModelRoutes(
 
     // Try to authenticate — unauthenticated users still see models
     let allowedModelGroups: string[] | null = null;
+    let maxAllowedResolution: VideoResolution | null = null;
     try {
       const user = await options.auth.authenticate(request);
       if (user) {
@@ -30,6 +35,7 @@ export async function registerVideoModelRoutes(
           viewer.workspace.id,
         );
         allowedModelGroups = config.allowedModelGroups;
+        maxAllowedResolution = config.maxVideoResolution;
       }
     } catch {
       // Auth failure is non-fatal — just show models as inaccessible
@@ -44,6 +50,8 @@ export async function registerVideoModelRoutes(
       accessible:
         allowedModelGroups?.includes(getModelAccessGroup(m.id)) ?? false,
       creditCost: getVideoCreditCost(m.id),
+      maxAllowedResolution,
+      limits: m.limits,
       minTier: MODEL_MIN_TIER[m.id] ?? "pro",
     }));
 

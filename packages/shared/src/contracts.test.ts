@@ -10,7 +10,11 @@ import {
   adminPasswordResetRequestSchema,
   adminUpdateUserRequestSchema,
   adminUpdateUserStatusRequestSchema,
+  createImageJobRequestSchema,
+  createVideoJobRequestSchema,
   errorCodeValues,
+  getImageCreditCost,
+  getVideoCreditCost,
   healthResponseSchema,
   publishedBillingPlanSchema,
   runCancelResponseSchema,
@@ -26,6 +30,18 @@ const databaseTypeSource = readFileSync(
 );
 
 describe("@loomic/shared contracts", () => {
+  it("normalizes generation defaults before admission and billing", () => {
+    const image = createImageJobRequestSchema.parse({ prompt: "image" });
+    const video = createVideoJobRequestSchema.parse({ prompt: "video" });
+
+    expect(image.quality).toBe("standard");
+    expect(video.resolution).toBe("720p");
+    expect(getImageCreditCost("black-forest-labs/flux-kontext-pro")).toBe(8);
+    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "720p")).toBe(125);
+    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "1080p")).toBe(250);
+    expect(getVideoCreditCost("google-official/veo-3.1-generate-preview", 8, "4k")).toBe(500);
+  });
+
   it("shares the health response schema for server and web", () => {
     const parsed = healthResponseSchema.parse({
       ok: true,

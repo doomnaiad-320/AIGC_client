@@ -1,5 +1,9 @@
 import { tool } from "langchain";
 import { z } from "zod";
+import {
+  DEFAULT_VIDEO_RESOLUTION,
+  type VideoResolution,
+} from "@loomic/shared";
 
 import { generateVideo } from "../../generation/video-generation.js";
 import {
@@ -16,7 +20,7 @@ export type SubmitVideoJobFn = (input: {
   prompt: string;
   model: string;
   duration?: number;
-  resolution?: string;
+  resolution?: VideoResolution;
   aspectRatio?: string;
   inputImages?: string[];
   inputVideo?: string;
@@ -77,9 +81,9 @@ function buildVideoGenerateSchema(models: AvailableModel[]) {
         "Video duration in seconds. Valid range depends on model (see model descriptions). Google Veo supports 4/6/8, Replicate models support 3-16.",
       ),
     resolution: z
-      .enum(["480p", "720p", "1080p", "4k"])
+      .enum(["720p", "1080p", "4k"])
       .optional()
-      .default("720p")
+      .default(DEFAULT_VIDEO_RESOLUTION)
       .describe("Output resolution. 720p recommended for balance of quality and speed. 1080p/4k supported by Google Veo official models (8s duration required)."),
     aspectRatio: z
       .enum(["1:1", "16:9", "9:16", "4:3", "3:4"])
@@ -158,6 +162,7 @@ export async function runVideoGenerate(
   const lap = (label: string, extra?: Record<string, unknown>) => {
     console.log(`[generate_video] ${label} +${Date.now() - t0}ms`, extra ? JSON.stringify(extra) : "");
   };
+  const resolution = input.resolution ?? DEFAULT_VIDEO_RESOLUTION;
 
   // Filter invalid image references
   if (input.inputImages?.length) {
@@ -175,7 +180,7 @@ export async function runVideoGenerate(
         prompt: input.prompt,
         model: input.model,
         duration: input.duration,
-        resolution: input.resolution,
+        resolution,
         aspectRatio: input.aspectRatio,
         ...(input.inputImages ? { inputImages: input.inputImages } : {}),
         ...(input.inputVideo ? { inputVideo: input.inputVideo } : {}),
@@ -236,7 +241,7 @@ export async function runVideoGenerate(
       model: input.model,
       duration: input.duration,
       aspectRatio: input.aspectRatio,
-      ...(input.resolution ? { resolution: input.resolution as "480p" | "720p" | "1080p" } : {}),
+      resolution,
       ...(input.inputImages ? { inputImages: input.inputImages } : {}),
       ...(input.inputVideo ? { inputVideo: input.inputVideo } : {}),
       ...(input.enableAudio != null ? { enableAudio: input.enableAudio } : {}),

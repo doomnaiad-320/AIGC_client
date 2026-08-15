@@ -1,3 +1,8 @@
+import type {
+  ImageQualityLevel,
+  VideoResolution,
+} from "@loomic/shared";
+
 /** Metadata describing a model supported by a provider. */
 export interface ModelInfo {
   /** Provider-scoped model ID, e.g. "google/nano-banana-pro" */
@@ -8,6 +13,8 @@ export interface ModelInfo {
   description: string;
   /** URL to the model owner's avatar/icon */
   iconUrl?: string;
+  /** Highest semantic image quality this model can actually honor. */
+  maxImageQuality?: ImageQualityLevel;
 }
 
 /**
@@ -16,7 +23,7 @@ export interface ModelInfo {
  * - hd:       ~2K (default, production quality)
  * - ultra:    ~4K (highest, print quality — not all models support this)
  */
-export type ImageQuality = "standard" | "hd" | "ultra";
+export type ImageQuality = ImageQualityLevel;
 
 export type OutputFormat = "png" | "jpg" | "webp";
 
@@ -48,7 +55,7 @@ export interface ImageProvider {
 export interface VideoGenerateParams {
   prompt: string;
   model: string;
-  resolution?: "480p" | "720p" | "1080p";
+  resolution?: VideoResolution;
   duration?: number;
   aspectRatio?: string;
   inputImages?: string[];

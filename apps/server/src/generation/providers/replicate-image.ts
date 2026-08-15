@@ -50,24 +50,28 @@ const REPLICATE_IMAGE_MODELS: readonly ModelInfo[] = [
     displayName: "Nano Banana Pro",
     description: "Google's SOTA image generation & editing model. Image input: up to 14 images. Up to 4K resolution. Best for multi-reference editing.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "ultra",
   },
   {
     id: "google/nano-banana-2",
     displayName: "Nano Banana 2",
     description: "Fast image generation with conversational editing and character consistency. Image input: up to 14 images. Good for multi-image fusion.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "ultra",
   },
   {
     id: "google/nano-banana",
     displayName: "Nano Banana",
     description: "Google's image editing model in Gemini 2.5. Image input: up to 14 images. Best for editing & transformation tasks.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "standard",
   },
   {
     id: "google/imagen-4",
     displayName: "Imagen 4",
     description: "Google's Imagen 4 flagship text-to-image model. Image input: NONE (text-only). Best pure text-to-image quality.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "hd",
   },
   // OpenAI
   {
@@ -75,6 +79,7 @@ const REPLICATE_IMAGE_MODELS: readonly ModelInfo[] = [
     displayName: "GPT Image 1.5",
     description: "OpenAI's latest image model with better instruction following. Image input: multiple images. Supports background transparency.",
     iconUrl: ICON_OPENAI,
+    maxImageQuality: "hd",
   },
   // Black Forest Labs
   {
@@ -82,12 +87,14 @@ const REPLICATE_IMAGE_MODELS: readonly ModelInfo[] = [
     displayName: "Flux Kontext Max",
     description: "Premium text-based image editing with maximum performance and improved typography. Image input: 1 image only. Best for single-image editing.",
     iconUrl: ICON_BFL,
+    maxImageQuality: "standard",
   },
   {
     id: "black-forest-labs/flux-kontext-pro",
     displayName: "Flux Kontext Pro",
     description: "SOTA text-based image editing with excellent prompt following and consistent results. Image input: 1 image only. Best for single-image editing.",
     iconUrl: ICON_BFL,
+    maxImageQuality: "standard",
   },
   // ByteDance
   {
@@ -95,18 +102,21 @@ const REPLICATE_IMAGE_MODELS: readonly ModelInfo[] = [
     displayName: "Seedream 5.0 Lite",
     description: "Image generation with built-in reasoning and example-based editing. Image input: multiple images. Up to 3K resolution.",
     iconUrl: ICON_BYTEDANCE,
+    maxImageQuality: "ultra",
   },
   {
     id: "bytedance/seedream-4.5",
     displayName: "Seedream 4.5",
     description: "Upgraded ByteDance model with stronger spatial understanding. Image input: multiple images. Up to 4K resolution.",
     iconUrl: ICON_BYTEDANCE,
+    maxImageQuality: "ultra",
   },
   {
     id: "bytedance/seedream-4",
     displayName: "Seedream 4",
     description: "Unified text-to-image generation and precise editing. Image input: multiple images. Up to 4K resolution.",
     iconUrl: ICON_BYTEDANCE,
+    maxImageQuality: "ultra",
   },
   // Recraft
   {
@@ -114,6 +124,7 @@ const REPLICATE_IMAGE_MODELS: readonly ModelInfo[] = [
     displayName: "Recraft V3",
     description: "SOTA text-to-image with long text rendering and wide style variety. Image input: NONE (text-only). #1 by Artificial Analysis benchmark.",
     iconUrl: ICON_RECRAFT,
+    maxImageQuality: "standard",
   },
 ];
 

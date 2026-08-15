@@ -34,6 +34,7 @@ const GOOGLE_VERTEX_IMAGE_MODELS: readonly ModelInfo[] = [
     description:
       "Google Gemini 3 Pro image generation & editing preview via Vertex AI. Image input: up to 14 images. Up to 4K resolution. Best quality with advanced reasoning.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "ultra",
   },
   {
     id: "google-vertex/gemini-3.1-flash-image-preview",
@@ -41,6 +42,7 @@ const GOOGLE_VERTEX_IMAGE_MODELS: readonly ModelInfo[] = [
     description:
       "Google Gemini 3.1 image generation & editing preview via Vertex AI. Image input: up to 14 images. Faster generation, newest capabilities.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "ultra",
   },
   {
     id: "google-vertex/gemini-2.5-flash-image",
@@ -48,6 +50,7 @@ const GOOGLE_VERTEX_IMAGE_MODELS: readonly ModelInfo[] = [
     description:
       "Google Gemini native image generation & editing via Vertex AI. Image input: up to 14 images. Best balance of speed and quality.",
     iconUrl: ICON_GOOGLE,
+    maxImageQuality: "standard",
   },
 ];
 
@@ -100,7 +103,8 @@ export class GoogleVertexImageProvider implements ImageProvider {
     }
 
     const aspectRatio = params.aspectRatio ?? "1:1";
-    const imageSize = QUALITY_TO_IMAGE_SIZE[params.quality ?? "hd"] ?? "2K";
+    const imageSize =
+      QUALITY_TO_IMAGE_SIZE[params.quality ?? "standard"] ?? "1K";
 
     // Build content parts: text prompt + optional input images.
     const parts: Array<

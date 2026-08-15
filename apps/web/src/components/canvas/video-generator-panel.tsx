@@ -3,6 +3,11 @@
 import { Lock, Plus, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  getVideoCreditCost,
+  isVideoResolutionAtMost,
+  type VideoResolution,
+} from "@loomic/shared";
 
 import type { VideoModelInfo } from "../../lib/server-api";
 import { fetchVideoModels, generateVideoDirect } from "../../lib/server-api";
@@ -26,6 +31,26 @@ type VideoGeneratorPanelProps = {
 
 const ASPECT_RATIOS = ["16:9", "9:16"] as const;
 const DURATIONS = [4, 5, 6, 8] as const;
+const RESOLUTIONS = ["720p", "1080p", "4k"] as const;
+
+function normalizeResolution(value: string): VideoResolution {
+  return value === "1080p" || value === "4k" ? value : "720p";
+}
+
+function normalizeModelMaxResolution(
+  value: "480p" | "720p" | "1080p" | "2160p" | undefined,
+): VideoResolution {
+  if (value === "2160p") return "4k";
+  if (value === "1080p") return "1080p";
+  return "720p";
+}
+
+function lowerResolution(
+  first: VideoResolution,
+  second: VideoResolution,
+): VideoResolution {
+  return isVideoResolutionAtMost(first, second) ? first : second;
+}
 
 export function VideoGeneratorPanel({
   elementId,
@@ -40,7 +65,9 @@ export function VideoGeneratorPanel({
   const [model, setModel] = useState(data.model);
   const [aspectRatio, setAspectRatio] = useState(data.aspectRatio);
   const [duration, setDuration] = useState(data.duration);
-  const [resolution, setResolution] = useState(data.resolution);
+  const [resolution, setResolution] = useState<VideoResolution>(
+    normalizeResolution(data.resolution),
+  );
   const [loading, setLoading] = useState(data.status === "generating");
   const [error, setError] = useState<string | null>(
     data.errorMessage ?? null,
@@ -70,7 +97,7 @@ export function VideoGeneratorPanel({
   // Fetch available models with error logging
   useEffect(() => {
     let cancelled = false;
-    fetchVideoModels()
+    fetchVideoModels(accessTokenRef.current)
       .then((r) => {
         if (!cancelled) setModels(r.models);
       })
@@ -114,6 +141,43 @@ export function VideoGeneratorPanel({
     (elementBounds.y + elementBounds.height + scrollY) * zoom + 8;
 
   const currentModel = models.find((m) => m.id === model);
+  const planMaxResolution = currentModel?.maxAllowedResolution ?? "720p";
+  const modelMaxResolution = normalizeModelMaxResolution(
+    currentModel?.limits?.maxResolution,
+  );
+  const maxSelectableResolution = lowerResolution(
+    planMaxResolution,
+    modelMaxResolution,
+  );
+  const resolutionAllowed = isVideoResolutionAtMost(
+    resolution,
+    maxSelectableResolution,
+  );
+  const currentCreditCost = getVideoCreditCost(model, duration, resolution);
+
+  useEffect(() => {
+    if (models.length === 0) return;
+    const selected = models.find((item) => item.id === model);
+    const usable =
+      selected && selected.accessible !== false
+        ? selected
+        : models.find((item) => item.accessible !== false);
+    if (!usable) return;
+
+    const nextMaxResolution = lowerResolution(
+      usable.maxAllowedResolution ?? "720p",
+      normalizeModelMaxResolution(usable.limits?.maxResolution),
+    );
+    const nextResolution = lowerResolution(resolution, nextMaxResolution);
+    if (usable.id === model && nextResolution === resolution) return;
+
+    setModel(usable.id);
+    setResolution(nextResolution);
+    updateVideoGeneratorElement(excalidrawApi, elementId, {
+      model: usable.id,
+      resolution: nextResolution,
+    });
+  }, [excalidrawApi, elementId, model, models, resolution]);
 
   const handleAspectRatioChange = useCallback(
     (ratio: string) => {
@@ -134,13 +198,42 @@ export function VideoGeneratorPanel({
     [excalidrawApi, elementId],
   );
 
+  const handleResolutionChange = useCallback(
+    (nextResolution: VideoResolution) => {
+      if (
+        !isVideoResolutionAtMost(nextResolution, maxSelectableResolution)
+      ) {
+        return;
+      }
+      setResolution(nextResolution);
+      updateVideoGeneratorElement(excalidrawApi, elementId, {
+        resolution: nextResolution,
+      });
+    },
+    [excalidrawApi, elementId, maxSelectableResolution],
+  );
+
   const handleModelChange = useCallback(
     (m: string) => {
+      const selected = models.find((item) => item.id === m);
+      if (selected?.accessible === false) return;
+      const selectedPlanMax = selected?.maxAllowedResolution ?? "720p";
+      const selectedModelMax = normalizeModelMaxResolution(
+        selected?.limits?.maxResolution,
+      );
+      const nextResolution = lowerResolution(
+        resolution,
+        lowerResolution(selectedPlanMax, selectedModelMax),
+      );
       setModel(m);
+      setResolution(nextResolution);
       setShowModelDropdown(false);
-      updateVideoGeneratorElement(excalidrawApi, elementId, { model: m });
+      updateVideoGeneratorElement(excalidrawApi, elementId, {
+        model: m,
+        resolution: nextResolution,
+      });
     },
-    [excalidrawApi, elementId],
+    [excalidrawApi, elementId, models, resolution],
   );
 
   const handleFrameUpload = useCallback(
@@ -269,7 +362,7 @@ export function VideoGeneratorPanel({
     handleGenerationError,
   ]);
 
-  const paramsLabel = `${aspectRatio} \u00B7 ${duration}s`;
+  const paramsLabel = `${aspectRatio} \u00B7 ${duration}s \u00B7 ${resolution}`;
 
   return createPortal(
     <div
@@ -408,7 +501,7 @@ export function VideoGeneratorPanel({
                 </div>
               </div>
               {/* Duration row */}
-              <div>
+              <div className="mb-3">
                 <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Duration
                 </div>
@@ -427,6 +520,36 @@ export function VideoGeneratorPanel({
                       {d}s
                     </button>
                   ))}
+                </div>
+              </div>
+              {/* Resolution row */}
+              <div>
+                <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Resolution
+                </div>
+                <div className="flex gap-1">
+                  {RESOLUTIONS.map((item) => {
+                    const allowed = isVideoResolutionAtMost(
+                      item,
+                      maxSelectableResolution,
+                    );
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => handleResolutionChange(item)}
+                        disabled={!allowed}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                          item === resolution
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:bg-muted/60"
+                        }`}
+                      >
+                        {item}
+                        {!allowed && <Lock className="h-2.5 w-2.5" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -467,7 +590,8 @@ export function VideoGeneratorPanel({
                     key={m.id}
                     type="button"
                     onClick={() => handleModelChange(m.id)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted ${m.id === model ? "bg-muted" : ""} ${m.accessible === false ? "opacity-60" : ""}`}
+                    disabled={m.accessible === false}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed ${m.id === model ? "bg-muted" : ""} ${m.accessible === false ? "opacity-60" : ""}`}
                   >
                     {m.iconUrl && (
                       <img
@@ -482,12 +606,10 @@ export function VideoGeneratorPanel({
                         <Lock className="ml-1 inline h-2.5 w-2.5 text-muted-foreground" />
                       )}
                     </span>
-                    {typeof m.creditCost === "number" && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
-                        <Zap className="h-2.5 w-2.5" />
-                        {m.creditCost}
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      <Zap className="h-2.5 w-2.5" />
+                      {getVideoCreditCost(m.id, duration, resolution)}
+                    </span>
                     {m.id === model && (
                       <svg
                         className="h-3 w-3 text-foreground"
@@ -511,7 +633,12 @@ export function VideoGeneratorPanel({
           <button
             type="button"
             onClick={() => void handleGenerate()}
-            disabled={!prompt.trim() || loading}
+            disabled={
+              !prompt.trim() ||
+              loading ||
+              currentModel?.accessible === false ||
+              !resolutionAllowed
+            }
             className="flex h-8 items-center justify-center gap-1 rounded-full bg-primary px-3 text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           >
             {loading ? (
@@ -525,11 +652,9 @@ export function VideoGeneratorPanel({
                 >
                   <path d="M6.9 4.36H5.385V.76c0-.84-.447-1.01-.991-.38L4 .835.677 4.685c-.457.525-.265.955.422.955h1.517v3.6c0 .84.446 1.01.991.38L4 9.165l3.323-3.85c.456-.525.265-.955-.422-.955" />
                 </svg>
-                {typeof currentModel?.creditCost === "number" && (
-                  <span className="text-xs tabular-nums">
-                    {currentModel.creditCost}
-                  </span>
-                )}
+                <span className="text-xs tabular-nums">
+                  {currentCreditCost}
+                </span>
               </>
             )}
           </button>

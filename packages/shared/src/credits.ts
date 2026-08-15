@@ -28,8 +28,14 @@ export type CreditTransactionType = z.infer<typeof creditTransactionTypeSchema>;
 
 // ── Quality / resolution types ────────────────────────────────
 
-export type ImageQualityLevel = "standard" | "hd" | "ultra";
-export type VideoResolution = "720p" | "1080p" | "4k";
+export const imageQualityLevelSchema = z.enum(["standard", "hd", "ultra"]);
+export type ImageQualityLevel = z.infer<typeof imageQualityLevelSchema>;
+
+export const videoResolutionSchema = z.enum(["720p", "1080p", "4k"]);
+export type VideoResolution = z.infer<typeof videoResolutionSchema>;
+
+export const DEFAULT_IMAGE_QUALITY: ImageQualityLevel = "standard";
+export const DEFAULT_VIDEO_RESOLUTION: VideoResolution = "720p";
 
 // ── Plan configuration ───────────────────────────────────────
 
@@ -303,7 +309,7 @@ const DEFAULT_VIDEO_COST: VideoModelCost = { base: 80 };
 /** Calculate the credit cost for an image generation. */
 export function getImageCreditCost(
   modelId: string,
-  quality: ImageQualityLevel = "hd",
+  quality: ImageQualityLevel = DEFAULT_IMAGE_QUALITY,
 ): number {
   const costs = IMAGE_MODEL_COSTS[modelId] ?? DEFAULT_IMAGE_COST;
   return costs[quality];
@@ -331,7 +337,21 @@ export function getVideoCreditCost(
 
 // ── Resolution guard ─────────────────────────────────────────
 
-const RESOLUTION_ORDER: ImageQualityLevel[] = ["standard", "hd", "ultra"];
+export const IMAGE_QUALITY_ORDER: readonly ImageQualityLevel[] = [
+  "standard",
+  "hd",
+  "ultra",
+];
+
+export function isImageQualityAtMost(
+  requested: ImageQualityLevel,
+  maximum: ImageQualityLevel,
+): boolean {
+  return (
+    IMAGE_QUALITY_ORDER.indexOf(requested) <=
+    IMAGE_QUALITY_ORDER.indexOf(maximum)
+  );
+}
 
 /** Check if a plan allows a given image quality level. */
 export function canUseResolution(
@@ -339,13 +359,24 @@ export function canUseResolution(
   quality: ImageQualityLevel,
 ): boolean {
   const config = PLAN_CONFIGS[plan];
-  return (
-    RESOLUTION_ORDER.indexOf(quality) <=
-    RESOLUTION_ORDER.indexOf(config.maxResolution)
-  );
+  return isImageQualityAtMost(quality, config.maxResolution);
 }
 
-const VIDEO_RESOLUTION_ORDER: VideoResolution[] = ["720p", "1080p", "4k"];
+export const VIDEO_RESOLUTION_ORDER: readonly VideoResolution[] = [
+  "720p",
+  "1080p",
+  "4k",
+];
+
+export function isVideoResolutionAtMost(
+  requested: VideoResolution,
+  maximum: VideoResolution,
+): boolean {
+  return (
+    VIDEO_RESOLUTION_ORDER.indexOf(requested) <=
+    VIDEO_RESOLUTION_ORDER.indexOf(maximum)
+  );
+}
 
 /** Check if a plan allows a given video resolution. */
 export function canUseVideoResolution(
@@ -353,10 +384,7 @@ export function canUseVideoResolution(
   resolution: VideoResolution,
 ): boolean {
   const config = PLAN_CONFIGS[plan];
-  return (
-    VIDEO_RESOLUTION_ORDER.indexOf(resolution) <=
-    VIDEO_RESOLUTION_ORDER.indexOf(config.maxVideoResolution)
-  );
+  return isVideoResolutionAtMost(resolution, config.maxVideoResolution);
 }
 
 // ── API schemas ──────────────────────────────────────────────
@@ -367,7 +395,8 @@ export const creditBalanceResponseSchema = z.object({
   dailyClaimed: z.boolean(),
   limits: z.object({
     maxConcurrentJobs: z.number().int(),
-    maxResolution: z.string(),
+    maxResolution: imageQualityLevelSchema,
+    maxVideoResolution: videoResolutionSchema,
     monthlyCredits: z.number().int(),
     dailyCredits: z.number().int(),
   }),

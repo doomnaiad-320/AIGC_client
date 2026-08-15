@@ -4,7 +4,11 @@ import { generateImage } from "../../../generation/image-generation.js";
 import { resolveImageProviderName } from "../../../generation/providers/registry.js";
 import { applyWatermark } from "../../credits/watermark.js";
 
-import type { SubscriptionPlan } from "@loomic/shared";
+import {
+  DEFAULT_IMAGE_QUALITY,
+  type ImageQualityLevel,
+  type SubscriptionPlan,
+} from "@loomic/shared";
 
 registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorContext) => {
   const t0 = Date.now();
@@ -31,7 +35,7 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
     prompt: string;
     model?: string;
     aspect_ratio?: string;
-    quality?: "standard" | "hd" | "ultra";
+    quality?: ImageQualityLevel;
     title?: string;
     input_images?: string[];
   };
@@ -42,7 +46,8 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
   const workspaceId: string = jobRow.workspace_id ?? jobId;
 
   // Resolve provider dynamically from model ID via registry
-  const model = payload.model ?? "black-forest-labs/flux-kontext-pro";
+  const model = payload.model ?? "google/nano-banana";
+  const quality = payload.quality ?? DEFAULT_IMAGE_QUALITY;
   const providerName = resolveImageProviderName(model);
 
   // Renew VT every 60s (half of the 120s image queue VT) to prevent
@@ -69,7 +74,7 @@ registerExecutor("image_generation", async (jobId, _rawPayload, ctx: ExecutorCon
         prompt: payload.prompt,
         model,
         ...(payload.aspect_ratio !== undefined ? { aspectRatio: payload.aspect_ratio } : {}),
-        ...(payload.quality !== undefined ? { quality: payload.quality } : {}),
+        quality,
         ...(payload.input_images?.length ? { inputImages: payload.input_images } : {}),
       });
     } catch (genError) {

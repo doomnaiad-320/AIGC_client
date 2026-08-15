@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import {
+  DEFAULT_IMAGE_QUALITY,
+  DEFAULT_VIDEO_RESOLUTION,
+  imageQualityLevelSchema,
+  videoResolutionSchema,
+} from "./credits.js";
+
 // --- Enums ---
 
 export const backgroundJobStatusSchema = z.enum([
@@ -24,6 +31,7 @@ export const imageGenerationPayloadSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   aspect_ratio: z.string().optional(),
+  quality: imageQualityLevelSchema.default(DEFAULT_IMAGE_QUALITY),
 });
 export type ImageGenerationPayload = z.infer<typeof imageGenerationPayloadSchema>;
 
@@ -31,7 +39,7 @@ export const videoGenerationPayloadSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   duration: z.number().int().optional(),
-  resolution: z.string().optional(),
+  resolution: videoResolutionSchema.default(DEFAULT_VIDEO_RESOLUTION),
   aspect_ratio: z.string().optional(),
   input_images: z.array(z.string()).optional(),
   input_video: z.string().optional(),
@@ -47,7 +55,7 @@ export const createVideoJobRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   duration: z.number().int().optional(),
-  resolution: z.string().optional(),
+  resolution: videoResolutionSchema.default(DEFAULT_VIDEO_RESOLUTION),
   aspect_ratio: z.string().optional(),
   input_images: z.array(z.string()).optional(),
   input_video: z.string().optional(),
@@ -93,6 +101,7 @@ export const createImageJobRequestSchema = z.object({
   prompt: z.string().min(1),
   model: z.string().optional(),
   aspect_ratio: z.string().optional(),
+  quality: imageQualityLevelSchema.default(DEFAULT_IMAGE_QUALITY),
 });
 export type CreateImageJobRequest = z.infer<typeof createImageJobRequestSchema>;
 

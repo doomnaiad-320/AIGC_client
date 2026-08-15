@@ -237,10 +237,15 @@ export class GoogleVertexVideoProvider implements VideoProvider {
       );
     }
 
-    // Validate & clamp resolution
-    let resolution = params.resolution ?? "720p";
+    // Validation also runs in the shared generation entrypoint. Keep this
+    // provider guard so direct provider usage cannot silently downgrade output.
+    const resolution = params.resolution ?? "720p";
     if (!caps.allowedResolutions.includes(resolution)) {
-      resolution = caps.allowedResolutions.includes("1080p") ? "1080p" : "720p";
+      throw new GenerationError(
+        PROVIDER_NAME,
+        "invalid_input",
+        `Model ${apiModel} does not support resolution "${resolution}". Supported: ${caps.allowedResolutions.join(", ")}.`,
+      );
     }
 
     const durationSeconds = clampToNearest(

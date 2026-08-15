@@ -3,6 +3,11 @@
 import { ImageUp, Lock, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  getImageCreditCost,
+  isImageQualityAtMost,
+  type ImageQualityLevel,
+} from "@loomic/shared";
 
 import type { ImageModelInfo } from "../../lib/server-api";
 import { fetchImageModels, generateImageDirect } from "../../lib/server-api";
@@ -34,6 +39,17 @@ const QUALITIES = [
   { value: "ultra", label: "4K" },
 ] as const;
 
+function normalizeQuality(value: string): ImageQualityLevel {
+  return value === "hd" || value === "ultra" ? value : "standard";
+}
+
+function lowerQuality(
+  first: ImageQualityLevel,
+  second: ImageQualityLevel,
+): ImageQualityLevel {
+  return isImageQualityAtMost(first, second) ? first : second;
+}
+
 function generateId(): string {
   return (
     Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
@@ -52,7 +68,9 @@ export function ImageGeneratorPanel({
   const [prompt, setPrompt] = useState(data.prompt);
   const [model, setModel] = useState(data.model);
   const [aspectRatio, setAspectRatio] = useState(data.aspectRatio);
-  const [quality, setQuality] = useState(data.quality);
+  const [quality, setQuality] = useState<ImageQualityLevel>(
+    normalizeQuality(data.quality),
+  );
   const [loading, setLoading] = useState(data.status === "generating");
   const [error, setError] = useState<string | null>(data.errorMessage ?? null);
   const [models, setModels] = useState<ImageModelInfo[]>([]);
@@ -72,7 +90,7 @@ export function ImageGeneratorPanel({
   // Fetch available models with error logging
   useEffect(() => {
     let cancelled = false;
-    fetchImageModels()
+    fetchImageModels(accessTokenRef.current)
       .then((r) => {
         if (!cancelled) setModels(r.models);
       })
@@ -117,6 +135,38 @@ export function ImageGeneratorPanel({
     (elementBounds.y + elementBounds.height + scrollY) * zoom + 8;
 
   const currentModel = models.find((m) => m.id === model);
+  const planMaxQuality = currentModel?.maxAllowedQuality ?? "standard";
+  const modelMaxQuality = currentModel?.maxImageQuality ?? "ultra";
+  const maxSelectableQuality = lowerQuality(planMaxQuality, modelMaxQuality);
+  const qualityAllowed = isImageQualityAtMost(
+    quality,
+    maxSelectableQuality,
+  );
+  const currentCreditCost = getImageCreditCost(model, quality);
+
+  useEffect(() => {
+    if (models.length === 0) return;
+    const selected = models.find((item) => item.id === model);
+    const usable =
+      selected && selected.accessible !== false
+        ? selected
+        : models.find((item) => item.accessible !== false);
+    if (!usable) return;
+
+    const nextMaxQuality = lowerQuality(
+      usable.maxAllowedQuality ?? "standard",
+      usable.maxImageQuality ?? "ultra",
+    );
+    const nextQuality = lowerQuality(quality, nextMaxQuality);
+    if (usable.id === model && nextQuality === quality) return;
+
+    setModel(usable.id);
+    setQuality(nextQuality);
+    updateImageGeneratorElement(excalidrawApi, elementId, {
+      model: usable.id,
+      quality: nextQuality,
+    });
+  }, [excalidrawApi, elementId, model, models, quality]);
 
   const handleAspectRatioChange = useCallback(
     (ratio: string) => {
@@ -131,21 +181,34 @@ export function ImageGeneratorPanel({
   );
 
   const handleQualityChange = useCallback(
-    (q: string) => {
+    (q: ImageQualityLevel) => {
+      if (!isImageQualityAtMost(q, maxSelectableQuality)) return;
       setQuality(q);
       setShowQualityDropdown(false);
       updateImageGeneratorElement(excalidrawApi, elementId, { quality: q });
     },
-    [excalidrawApi, elementId],
+    [excalidrawApi, elementId, maxSelectableQuality],
   );
 
   const handleModelChange = useCallback(
     (m: string) => {
+      const selected = models.find((item) => item.id === m);
+      if (selected?.accessible === false) return;
+      const selectedPlanMax = selected?.maxAllowedQuality ?? "standard";
+      const selectedModelMax = selected?.maxImageQuality ?? "ultra";
+      const nextQuality = lowerQuality(
+        quality,
+        lowerQuality(selectedPlanMax, selectedModelMax),
+      );
       setModel(m);
+      setQuality(nextQuality);
       setShowModelDropdown(false);
-      updateImageGeneratorElement(excalidrawApi, elementId, { model: m });
+      updateImageGeneratorElement(excalidrawApi, elementId, {
+        model: m,
+        quality: nextQuality,
+      });
     },
-    [excalidrawApi, elementId],
+    [excalidrawApi, elementId, models, quality],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -307,7 +370,8 @@ export function ImageGeneratorPanel({
                     key={m.id}
                     type="button"
                     onClick={() => handleModelChange(m.id)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted ${m.id === model ? "bg-muted" : ""} ${m.accessible === false ? "opacity-60" : ""}`}
+                    disabled={m.accessible === false}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed ${m.id === model ? "bg-muted" : ""} ${m.accessible === false ? "opacity-60" : ""}`}
                   >
                     {m.iconUrl && (
                       <img
@@ -322,12 +386,10 @@ export function ImageGeneratorPanel({
                         <Lock className="ml-1 inline h-2.5 w-2.5 text-muted-foreground" />
                       )}
                     </span>
-                    {typeof m.creditCost === "number" && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
-                        <Zap className="h-2.5 w-2.5" />
-                        {m.creditCost}
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      <Zap className="h-2.5 w-2.5" />
+                      {getImageCreditCost(m.id, quality)}
+                    </span>
                     {m.id === model && (
                       <svg
                         className="h-3 w-3 text-foreground"
@@ -425,16 +487,24 @@ export function ImageGeneratorPanel({
             </button>
             {showQualityDropdown && (
               <div className="absolute bottom-full right-0 z-50 mb-1 rounded-lg border-[0.5px] border-border bg-card py-1 shadow-card">
-                {QUALITIES.map((q) => (
-                  <button
-                    key={q.value}
-                    type="button"
-                    onClick={() => handleQualityChange(q.value)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-muted ${q.value === quality ? "bg-muted text-foreground" : "text-muted-foreground"}`}
-                  >
-                    {q.label}
-                  </button>
-                ))}
+                {QUALITIES.map((q) => {
+                  const allowed = isImageQualityAtMost(
+                    q.value,
+                    maxSelectableQuality,
+                  );
+                  return (
+                    <button
+                      key={q.value}
+                      type="button"
+                      onClick={() => handleQualityChange(q.value)}
+                      disabled={!allowed}
+                      className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${q.value === quality ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                    >
+                      {q.label}
+                      {!allowed && <Lock className="ml-auto h-2.5 w-2.5" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -475,19 +545,29 @@ export function ImageGeneratorPanel({
           <button
             type="button"
             onClick={() => void handleGenerate()}
-            disabled={!prompt.trim() || loading}
-            className="flex h-8 min-w-12 items-center justify-center gap-1 rounded-full bg-primary p-2 text-primary-foreground transition-colors hover:bg-primary/80 hover:accent-glow disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+            disabled={
+              !prompt.trim() ||
+              loading ||
+              currentModel?.accessible === false ||
+              !qualityAllowed
+            }
+            className="flex h-8 min-w-12 items-center justify-center gap-1 rounded-full bg-primary px-3 text-primary-foreground transition-colors hover:bg-primary/80 hover:accent-glow disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           >
             {loading ? (
               <div className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/30 border-t-white" />
             ) : (
-              <svg
-                className="h-3.5 w-[9.3px] shrink-0"
-                viewBox="0 0 8 10"
-                fill="currentColor"
-              >
-                <path d="M6.9 4.36H5.385V.76c0-.84-.447-1.01-.991-.38L4 .835.677 4.685c-.457.525-.265.955.422.955h1.517v3.6c0 .84.446 1.01.991.38L4 9.165l3.323-3.85c.456-.525.265-.955-.422-.955" />
-              </svg>
+              <>
+                <svg
+                  className="h-3.5 w-[9.3px] shrink-0"
+                  viewBox="0 0 8 10"
+                  fill="currentColor"
+                >
+                  <path d="M6.9 4.36H5.385V.76c0-.84-.447-1.01-.991-.38L4 .835.677 4.685c-.457.525-.265.955.422.955h1.517v3.6c0 .84.446 1.01.991.38L4 9.165l3.323-3.85c.456-.525.265-.955-.422-.955" />
+                </svg>
+                <span className="text-xs tabular-nums">
+                  {currentCreditCost}
+                </span>
+              </>
             )}
           </button>
         </div>

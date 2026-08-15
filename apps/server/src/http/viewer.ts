@@ -72,6 +72,7 @@ export async function registerViewerRoutes(
             limits: {
               maxConcurrentJobs: config.maxConcurrentJobs,
               maxResolution: config.maxImageQuality,
+              maxVideoResolution: config.maxVideoResolution,
               monthlyCredits: config.monthlySubscriptionCredits,
               dailyCredits: config.dailyCredits,
             },

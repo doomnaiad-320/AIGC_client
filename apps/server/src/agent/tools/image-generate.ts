@@ -2,6 +2,10 @@ import { tool } from "langchain";
 import { z } from "zod";
 
 import { randomUUID } from "node:crypto";
+import {
+  DEFAULT_IMAGE_QUALITY,
+  type ImageQualityLevel,
+} from "@loomic/shared";
 
 import { generateImage } from "../../generation/image-generation.js";
 import {
@@ -10,7 +14,7 @@ import {
   type AvailableModel,
 } from "../../generation/providers/registry.js";
 
-const DEFAULT_MODEL = "black-forest-labs/flux-kontext-pro";
+const DEFAULT_MODEL = "google/nano-banana";
 
 /**
  * Build the zod schema dynamically from the models available in the registry.
@@ -52,9 +56,9 @@ function buildImageGenerateSchema(models: AvailableModel[]) {
     quality: z
       .enum(["standard", "hd", "ultra"])
       .optional()
-      .default("hd")
+      .default(DEFAULT_IMAGE_QUALITY)
       .describe(
-        "Image quality/resolution level. standard: ~1K fast preview, hd: ~2K production quality (default), ultra: ~4K print quality (not all models support this, will use max available).",
+        "Image quality/resolution level. standard: ~1K fast preview (default), hd: ~2K production quality, ultra: ~4K print quality. Choose only a level supported by the selected model.",
       ),
     outputFormat: z
       .enum(["png", "jpg", "webp"])
@@ -96,7 +100,7 @@ type ImageGenerateInput = {
   prompt: string;
   model: string;
   aspectRatio?: string;
-  quality?: string;
+  quality?: ImageQualityLevel;
   outputFormat?: string;
   inputImages?: string[];
   placementX?: number;
@@ -139,7 +143,7 @@ export type SubmitImageJobFn = (input: {
   model: string;
   aspectRatio: string;
   inputImages?: string[];
-  quality?: string;
+  quality?: ImageQualityLevel;
 }) => Promise<{
   jobId: string;
   elementId?: string;
@@ -160,6 +164,7 @@ export async function runImageGenerate(
   const lap = (label: string, extra?: Record<string, unknown>) => {
     console.log(`[generate_image] ${label} +${Date.now() - t0}ms`, extra ? JSON.stringify(extra) : "");
   };
+  const quality = input.quality ?? DEFAULT_IMAGE_QUALITY;
 
   // Resolve assetId references in inputImages to base64 data URIs
   if (input.inputImages?.length && attachmentMap) {
@@ -201,6 +206,7 @@ export async function runImageGenerate(
         title: input.title,
         model: input.model,
         aspectRatio: input.aspectRatio ?? "1:1",
+        quality,
         ...(input.inputImages ? { inputImages: input.inputImages } : {}),
       });
 
@@ -255,7 +261,7 @@ export async function runImageGenerate(
       prompt: input.prompt,
       model: input.model,
       ...(input.aspectRatio ? { aspectRatio: input.aspectRatio } : {}),
-      ...(input.quality ? { quality: input.quality as any } : {}),
+      quality,
       ...(input.outputFormat ? { outputFormat: input.outputFormat as any } : {}),
       ...(input.inputImages?.length ? { inputImages: input.inputImages } : {}),
     });

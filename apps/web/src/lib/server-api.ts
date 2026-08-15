@@ -477,12 +477,19 @@ export type ImageModelInfo = {
   provider: string;
   iconUrl?: string;
   creditCost?: number;
+  creditCosts?: { standard: number; hd: number; ultra: number };
   accessible?: boolean;
   minTier?: string;
+  maxImageQuality?: "standard" | "hd" | "ultra";
+  maxAllowedQuality?: "standard" | "hd" | "ultra" | null;
 };
 
-export async function fetchImageModels(): Promise<{ models: ImageModelInfo[] }> {
-  const response = await fetch(`${getServerBaseUrl()}/api/image-models`);
+export async function fetchImageModels(
+  accessToken?: string,
+): Promise<{ models: ImageModelInfo[] }> {
+  const response = await fetch(`${getServerBaseUrl()}/api/image-models`, {
+    ...(accessToken ? { headers: authHeaders(accessToken) } : {}),
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch image models: ${response.status}`);
   }
@@ -498,10 +505,21 @@ export type VideoModelInfo = {
   creditCost?: number;
   accessible?: boolean;
   minTier?: string;
+  maxAllowedResolution?: "720p" | "1080p" | "4k" | null;
+  limits?: {
+    maxDuration: number;
+    allowedDurations?: number[];
+    maxResolution: "480p" | "720p" | "1080p" | "2160p";
+    maxInputImages: number;
+  };
 };
 
-export async function fetchVideoModels(): Promise<{ models: VideoModelInfo[] }> {
-  const response = await fetch(`${getServerBaseUrl()}/api/video-models`);
+export async function fetchVideoModels(
+  accessToken?: string,
+): Promise<{ models: VideoModelInfo[] }> {
+  const response = await fetch(`${getServerBaseUrl()}/api/video-models`, {
+    ...(accessToken ? { headers: authHeaders(accessToken) } : {}),
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch video models: ${response.status}`);
   }
