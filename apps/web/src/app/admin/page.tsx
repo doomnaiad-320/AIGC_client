@@ -103,73 +103,105 @@ type AdminTab =
   | "audit"
   | "platform-admins";
 
-const tabs: Array<{
+type AdminTabItem = {
   id: AdminTab;
   label: string;
   description: string;
   icon: typeof Users;
+};
+
+const menuGroups: Array<{
+  id: string;
+  label: string;
+  items: AdminTabItem[];
 }> = [
   {
-    id: "users",
-    label: "用户管理",
-    description: "管理用户账号、工作区权限、套餐与点数余额。",
-    icon: Users,
+    id: "organization",
+    label: "用户与组织",
+    items: [
+      {
+        id: "users",
+        label: "用户管理",
+        description: "管理用户账号、工作区权限、套餐与点数余额。",
+        icon: Users,
+      },
+      {
+        id: "workspaces",
+        label: "工作区管理",
+        description: "查看工作区归属、成员、项目、套餐与点数余额。",
+        icon: Building2,
+      },
+    ],
   },
   {
-    id: "workspaces",
-    label: "工作区管理",
-    description: "查看工作区归属、成员、项目、套餐与点数余额。",
-    icon: Building2,
+    id: "operations",
+    label: "运行监控",
+    items: [
+      {
+        id: "jobs",
+        label: "生成任务",
+        description: "监控任务队列、执行状态与失败原因。",
+        icon: Workflow,
+      },
+      {
+        id: "agent-runs",
+        label: "智能体运行",
+        description: "查看智能体会话、模型、线程与运行错误。",
+        icon: Bot,
+      },
+    ],
   },
   {
-    id: "jobs",
-    label: "生成任务",
-    description: "监控任务队列、执行状态与失败原因。",
-    icon: Workflow,
+    id: "commerce",
+    label: "计费与支付",
+    items: [
+      {
+        id: "ledger",
+        label: "点数流水",
+        description: "查看点数发放、消耗、退还与人工加点记录。",
+        icon: Coins,
+      },
+      {
+        id: "billing",
+        label: "套餐与计费",
+        description: "设置套餐价格、点数、并发与版本化权益。",
+        icon: CreditCard,
+      },
+      {
+        id: "top-up-packs",
+        label: "点数包",
+        description: "配置点数、USD 标价、DuluPay 实收价和可购买套餐。",
+        icon: PackageOpen,
+      },
+      {
+        id: "payment-providers",
+        label: "支付配置",
+        description: "管理 DuluPay 商户、RSA 密钥、支付方式和回调安全。",
+        icon: Landmark,
+      },
+    ],
   },
   {
-    id: "agent-runs",
-    label: "智能体运行",
-    description: "查看智能体会话、模型、线程与运行错误。",
-    icon: Bot,
-  },
-  {
-    id: "ledger",
-    label: "点数流水",
-    description: "查看点数发放、消耗、退还与人工加点记录。",
-    icon: Coins,
-  },
-  {
-    id: "billing",
-    label: "套餐与计费",
-    description: "设置套餐价格、点数、并发与版本化权益。",
-    icon: CreditCard,
-  },
-  {
-    id: "top-up-packs",
-    label: "点数包",
-    description: "配置点数、USD 标价、DuluPay 实收价和可购买套餐。",
-    icon: PackageOpen,
-  },
-  {
-    id: "payment-providers",
-    label: "支付配置",
-    description: "管理 DuluPay 商户、RSA 密钥、支付方式和回调安全。",
-    icon: Landmark,
-  },
-  {
-    id: "audit",
-    label: "审计日志",
-    description: "追踪管理员的敏感操作及其操作对象。",
-    icon: ClipboardList,
-  },
-  {
-    id: "platform-admins",
-    label: "平台管理员",
-    description: "单独管理平台级权限，与工作区角色明确区分。",
-    icon: ShieldCheck,
+    id: "governance",
+    label: "安全与治理",
+    items: [
+      {
+        id: "audit",
+        label: "审计日志",
+        description: "追踪管理员的敏感操作及其操作对象。",
+        icon: ClipboardList,
+      },
+      {
+        id: "platform-admins",
+        label: "平台管理员",
+        description: "单独管理平台级权限，与工作区角色明确区分。",
+        icon: ShieldCheck,
+      },
+    ],
   },
 ];
+
+const tabs = menuGroups.flatMap((group) => group.items);
 
 export default function AdminPage() {
   const { session, loading } = useAuth();
@@ -613,28 +645,41 @@ export default function AdminPage() {
             </span>
             <span className="text-sm font-semibold">Loomic 管理后台</span>
           </Link>
-          <div className="mt-6 space-y-1">
-            {tabs.map((item) => {
-              const Icon = item.icon;
-              const selected = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={cn(
-                    "flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition-colors",
-                    selected
-                      ? "bg-muted font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
-                  )}
+          <nav className="mt-6 space-y-5" aria-label="管理后台栏目">
+            {menuGroups.map((group) => (
+              <section key={group.id} aria-labelledby={`admin-nav-${group.id}`}>
+                <h2
+                  id={`admin-nav-${group.id}`}
+                  className="px-3 text-xs font-medium text-muted-foreground"
                 >
-                  <Icon className="size-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+                  {group.label}
+                </h2>
+                <div className="mt-2 ml-3 space-y-1 border-l pl-2">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const selected = tab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setTab(item.id)}
+                        aria-current={selected ? "page" : undefined}
+                        className={cn(
+                          "flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-sm transition-colors",
+                          selected
+                            ? "bg-muted font-medium text-foreground"
+                            : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </nav>
           <div className="mt-auto border-t pt-3">
             <Link
               href="/home"
@@ -680,30 +725,27 @@ export default function AdminPage() {
             </div>
           </header>
 
-          <nav
-            className="mt-4 flex gap-1 overflow-x-auto border-b lg:hidden"
-            aria-label="管理后台栏目"
-          >
-            {tabs.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={cn(
-                    "flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm",
-                    tab === item.id
-                      ? "border-foreground font-medium text-foreground"
-                      : "border-transparent text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="mt-4 lg:hidden">
+            <Label htmlFor="admin-section" className="sr-only">
+              管理后台栏目
+            </Label>
+            <select
+              id="admin-section"
+              value={tab}
+              onChange={(event) => setTab(event.target.value as AdminTab)}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {menuGroups.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
 
           {error && (
             <div
